@@ -1,1689 +1,1277 @@
-import { useState, useEffect } from "react";
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../../../firebase';
-import { socialSkillsServices } from './firebase-services';
-import GoogleSignIn from '../../../components/auth/GoogleSignIn';
-import SocialOnboardingQuiz from './SocialOnboardingQuiz';
-import ReactDOM from 'react-dom';
-import mixpanelService from 'src/services/servicesmixpanel';
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-} from "recharts";
-import {
-  TrendingUp,
-  Award,
-  Target,
-  Zap,
-  Star,
-  MessageCircle,
-  Users,
-  User,
-  Heart,
-  Sparkles,
-  ArrowRight,
-  CheckCircle,
-  Trophy,
-  Flame,
-  Calendar,
-  BarChart3,
-  Activity,
-  ArrowUpRight,
-} from "lucide-react";
+// ─── Google Fonts ──────────────────────────────────────────────────────────────
+const FontLoader = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap');
 
-// Icon mapping for traits
-const TRAIT_ICONS = {
-  Conversation: MessageCircle,
-  Listening: Heart,
-  Confidence: Zap,
-  Networking: Users,
-  Empathy: Sparkles
-};
-import { getAnalytics, logEvent } from "firebase/analytics";
-import { app } from '../../../firebase';  // adjust path if needed
-const analytics = getAnalytics(app);
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+   :root {
+  --bg: transparent;
+  --bg2: transparent;
+  --surface: rgba(42,20,80,0.9);
+  --surface2: rgba(55,25,100,0.7);
+  --border: rgba(192,162,252,0.2);
+  --border2: rgba(192,162,252,0.4);
+  --purple: #c084fc;
+  --purple-dark: #7c3aed;
+  --purple-mid: #a855f7;
+  --pink: #f472b6;
+  --orange: #fb923c;
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --muted: #8b7ab8;
+  --text: #f0e8ff;
+  --text2: #d8c8f8;
+  --text3: #a990d0;
+}
+
+body {
+  background: transparent;
+}
+
+.tracker-root {
+  font-family: 'Nunito', 'Poppins', sans-serif;
+  background: transparent;
+  min-height: 100vh;
+  color: var(--text);
+  position: relative;
+  overflow-x: hidden;
+}
 
 
-// Archetype definitions
-const ARCHETYPES = {
-  observer: {
-    name: 'Observer',
-    icon: '👁️',
-    traits: ['Thoughtful', 'Analytical', 'Cautious']
-  },
-  connector: {
-    name: 'Connector',
-    icon: '🤝',
-    traits: ['Social', 'Engaging', 'Empathetic']
-  },
-  supporter: {
-    name: 'Supporter',
-    icon: '💚',
-    traits: ['Caring', 'Loyal', 'Encouraging']
-  },
-  influencer: {
-    name: 'Influencer',
-    icon: '⭐',
-    traits: ['Charismatic', 'Confident', 'Inspiring']
-  }
-};
 
-// ============================================================================
-// PARTICLE BACKGROUND
-// ============================================================================
-const ParticleBackground = () => {
-  const particles = Array.from({ length: 50 }, (_, i) => ({
-    id: i,
-    size: Math.random() * 6 + 2,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    duration: Math.random() * 25 + 15,
-    delay: Math.random() * 8,
-    opacity: Math.random() * 0.6 + 0.3,
-    color: ['rgba(192, 132, 252, 0.7)', 'rgba(233, 121, 249, 0.6)', 'rgba(240, 171, 252, 0.5)'][i % 3],
-  }));
+    .content { position: relative; z-index: 1; }
+    .display { font-family: 'Poppins', sans-serif; font-weight: 800; }
+    .serif { font-family: 'Nunito', sans-serif; font-weight: 700; }
 
-  return (
-    <>
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-20px); }
-        }
-      `}</style>
-      <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
-        {particles.map(p => (
-          <div
-            key={p.id}
-            style={{
-              position: 'absolute',
-              left: `${p.x}%`,
-              top: `${p.y}%`,
-              width: `${p.size}px`,
-              height: `${p.size}px`,
-              borderRadius: '50%',
-              background: p.color,
-              animation: `float ${p.duration}s infinite ease-in-out ${p.delay}s`,
-              boxShadow: `0 0 ${p.size * 4}px ${p.color}`,
-              opacity: p.opacity,
-            }}
-          />
-        ))}
-      </div>
-    </>
-  );
-};
+    .glass-card {
+      background: rgba(42,20,80,0.75);
+      border: 1px solid rgba(192,162,252,0.2);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.07);
+    }
 
-// ============================================================================
-// CIRCULAR PROGRESS COMPONENT
-// ============================================================================
-const CircularProgress = ({ value, color, size = 112, strokeWidth = 8, children }) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (value / 100) * circumference;
+    .glass-card-hover {
+      transition: all 0.2s;
+    }
+    .glass-card-hover:hover {
+      border-color: rgba(192,162,252,0.45);
+      box-shadow: 0 8px 32px rgba(124,58,237,0.2), inset 0 1px 0 rgba(255,255,255,0.07);
+      transform: translateY(-1px);
+    }
 
-  return (
-    <div style={{ position: 'relative', width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.15)"
-          strokeWidth={strokeWidth}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 1.5s ease-out' }}
-        />
-      </svg>
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        {children}
-      </div>
-    </div>
-  );
-};
+    .nav-tab {
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.5rem 0.85rem;
+      border: 1px solid transparent;
+      background: none;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.2s;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .nav-tab.active {
+      color: white;
+      border-color: rgba(192,162,252,0.5);
+      background: linear-gradient(135deg, rgba(124,58,237,0.5), rgba(168,85,247,0.3));
+    }
+    .nav-tab:hover:not(.active) { color: var(--text2); background: rgba(255,255,255,0.06); }
 
-// ============================================================================
-// STYLED COMPONENTS
-// ============================================================================
-const GlassCard = ({ children }) => (
-  <div style={{
-    background: 'rgba(107, 33, 168, 0.25)',
-    backdropFilter: 'blur(20px)',
-    border: '2px solid rgba(192, 132, 252, 0.4)',
-    borderRadius: '2rem',
-    padding: '2rem',
-    boxShadow: '0 10px 40px rgba(192, 132, 252, 0.3)',
-    transition: 'all 0.3s ease',
-  }}>
-    {children}
-  </div>
+    .btn-primary {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 0.9rem 2rem;
+      background: linear-gradient(135deg, #ec4899, #f97316);
+      color: white;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(236,72,153,0.4);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(236,72,153,0.55);
+    }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 0.65rem 1.5rem;
+      background: rgba(192,162,252,0.15);
+      color: var(--purple);
+      border: 1px solid rgba(192,162,252,0.35);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { background: rgba(192,162,252,0.25); border-color: rgba(192,162,252,0.6); }
+
+    .btn-danger {
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 0.65rem 1.5rem;
+      background: rgba(248,113,113,0.15);
+      color: var(--red);
+      border: 1px solid rgba(248,113,113,0.35);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-danger:hover { background: rgba(248,113,113,0.25); }
+
+    .tag-btn {
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid rgba(192,162,252,0.3);
+      background: rgba(124,58,237,0.1);
+      color: var(--text3);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .tag-btn.selected {
+      background: linear-gradient(135deg, rgba(124,58,237,0.5), rgba(168,85,247,0.35));
+      color: white;
+      border-color: rgba(192,162,252,0.6);
+    }
+    .tag-btn:hover:not(.selected) { border-color: rgba(192,162,252,0.5); color: var(--text2); }
+
+    .voice-btn {
+      width: 68px; height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ec4899, #f97316);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.5rem;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(236,72,153,0.45);
+    }
+    .voice-btn:hover { transform: scale(1.05); box-shadow: 0 6px 28px rgba(236,72,153,0.65); }
+    .voice-btn.recording {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+      animation: pulse-ring 1.2s ease-out infinite;
+      box-shadow: 0 4px 20px rgba(239,68,68,0.4);
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(236,72,153,0.6); }
+      70% { box-shadow: 0 0 0 22px rgba(236,72,153,0); }
+      100% { box-shadow: 0 0 0 0 rgba(236,72,153,0); }
+    }
+
+    .level-input {
+      width: 90px;
+      text-align: center;
+      font-family: 'Poppins', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      background: rgba(124,58,237,0.12);
+      border: 2px solid rgba(192,162,252,0.35);
+      border-radius: 16px;
+      color: var(--purple);
+      outline: none;
+      padding: 0.5rem;
+      transition: all 0.2s;
+    }
+    .level-input:focus { border-color: rgba(192,162,252,0.7); box-shadow: 0 0 0 3px rgba(124,58,237,0.2); }
+
+    .insight-bubble {
+      border-left: 3px solid var(--purple-mid);
+      padding: 0.85rem 1rem;
+      background: rgba(124,58,237,0.1);
+      border-radius: 0 14px 14px 0;
+      color: var(--text2);
+      font-size: 0.88rem;
+      font-weight: 500;
+      line-height: 1.7;
+    }
+
+    .flame {
+      display: inline-block;
+      animation: flicker 1.5s ease-in-out infinite alternate;
+    }
+    @keyframes flicker {
+      0% { transform: scaleY(1) rotate(-2deg); }
+      100% { transform: scaleY(1.08) rotate(2deg); }
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #c084fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .gradient-text-green {
+      background: linear-gradient(135deg, #4ade80, #22c55e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .breath-ring {
+      border-radius: 50%;
+      background: rgba(124,58,237,0.15);
+      border: 2px solid rgba(192,162,252,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s;
+    }
+
+    .achievement-badge {
+      background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.05));
+      border: 1px solid rgba(251,191,36,0.3);
+      border-radius: 16px;
+      padding: 1rem;
+    }
+    .achievement-badge.earned {
+      background: linear-gradient(135deg, rgba(251,191,36,0.22), rgba(251,191,36,0.08));
+      border-color: rgba(251,191,36,0.55);
+    }
+    .achievement-badge.locked {
+      opacity: 0.38;
+      filter: grayscale(0.5);
+    }
+
+    .slider-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(124,58,237,0.25);
+      outline: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+    .slider-track::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ec4899, #f97316);
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(236,72,153,0.5);
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    .slider-track::-moz-range-thumb {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ec4899, #f97316);
+      cursor: pointer;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(192,162,252,0.35); border-radius: 4px; }
+
+    .glow-purple { box-shadow: 0 0 30px rgba(124,58,237,0.2); }
+    .glow-green { box-shadow: 0 0 30px rgba(74,222,128,0.15); }
+  `}</style>
 );
 
-const BubbleProgress = ({ trait }) => {
-  const Icon = TRAIT_ICONS[trait.trait] || Sparkles;
-  const growth = trait.future - trait.current;
+const TRIGGER_TAGS = [
+  "social event", "alone time", "rejection", "crowded place",
+  "phone call", "quiet day", "work stress", "conflict", "new people", "small win",
+  "presentation", "first time", "group setting", "performance"
+];
+
+const MOCK_AI_INSIGHTS = [
+  "You consistently spike before social events but recover within hours — that's resilience, not weakness.",
+  "Your anxiety is highest mid-week. Consider a 5-min grounding ritual on Tuesday mornings before the day starts.",
+  "Every time you took a social action, your post-action anxiety was lower than before. You're rewriting your nervous system.",
+  "Three weeks of data shows a downward trend. You're not imagining the progress — the numbers confirm it.",
+];
+
+const ACHIEVEMENTS = [
+  { id: 'first_log', title: 'First Step', desc: 'Logged your very first entry', icon: '🌟', threshold: 1, type: 'logged' },
+  { id: 'three_logs', title: 'Building Momentum', desc: 'Logged 3 days in a row', icon: '🔥', threshold: 3, type: 'streak' },
+  { id: 'action_hero', title: 'Action Hero', desc: 'Took action despite anxiety', icon: '⚡', threshold: 1, type: 'action' },
+  { id: 'courage_drop', title: 'Anxiety Slayer', desc: 'Anxiety dropped after taking action', icon: '🗡️', threshold: 1, type: 'drop' },
+  { id: 'week_warrior', title: 'Week Warrior', desc: 'Logged every day this week', icon: '👑', threshold: 5, type: 'logged' },
+];
+
+const BREATHING_EXERCISES = [
+  { name: '4-7-8 Breathing', icon: '🌊', inhale: 4, hold: 7, exhale: 8, color: '#c084fc', benefit: 'Deep nervous system reset' },
+  { name: 'Box Breathing', icon: '📦', inhale: 4, hold: 4, exhale: 4, holdOut: 4, color: '#4ade80', benefit: 'Used by Navy SEALs for stress control' },
+  { name: 'Quick Calm', icon: '💨', inhale: 2, hold: 1, exhale: 4, color: '#fbbf24', benefit: 'Fast anxiety relief in 60 seconds' },
+];
+
+const DAYS_SHORT = ["MON", "TUE", "WED", "THU", "FRI"];
+
+function makeWeekData() {
+  return DAYS_SHORT.map((day, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (4 - i));
+    return {
+      day,
+      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      preLevel: null, postLevel: null,
+      triggers: [], actionTaken: i < 3 ? Math.random() > 0.4 : false,
+      reflection: "",
+    };
+  });
+}
+
+function getAnxietyColor(v) {
+  if (v === null) return '#6b7280';
+  if (v <= 3) return '#4ade80';
+  if (v <= 6) return '#fbbf24';
+  return '#f87171';
+}
+
+function getAnxietyLabel(v) {
+  if (v === null) return '—';
+  if (v <= 2) return 'Calm';
+  if (v <= 4) return 'Mild';
+  if (v <= 6) return 'Moderate';
+  if (v <= 8) return 'High';
+  return 'Intense';
+}
+
+// ── Dial Meter ──────────────────────────────────────────────────────────────
+function DialMeter({ value, size = 120, label }) {
+  const r = 42;
+  const circ = 2 * Math.PI * r;
+  const pct = value !== null ? value / 10 : 0;
+  const offset = circ - pct * circ * 0.75;
+  const color = getAnxietyColor(value);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-      <CircularProgress value={trait.current} color="#e879f9" size={112} strokeWidth={8}>
-        <Icon style={{ width: 32, height: 32, color: "#f0abfc" }} />
-      </CircularProgress>
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', textShadow: '0 0 6px #e879f9', margin: 0 }}>
-          {trait.trait}
-        </p>
-        <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f0abfc', textShadow: '0 0 8px #e879f9', margin: '0.25rem 0' }}>
-          {trait.current}%
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
-          <ArrowUpRight style={{ width: 16, height: 16, color: '#c084fc' }} />
-          <span style={{ fontSize: '0.75rem', color: '#c084fc', fontWeight: '600' }}>+{growth}%</span>
-        </div>
+    <div style={{ textAlign: "center", width: size }}>
+      <svg width={size} height={size * 0.85} viewBox="0 0 100 85" style={{ overflow: "visible" }}>
+        <circle cx="50" cy="58" r={r} fill="none" strokeWidth="7"
+          stroke="rgba(124,58,237,0.12)" strokeLinecap="round"
+          strokeDasharray={`${circ * 0.75} ${circ * 0.25}`}
+          strokeDashoffset={0} transform="rotate(135 50 58)" />
+        {value !== null && (
+          <circle cx="50" cy="58" r={r} fill="none" strokeWidth="7"
+            stroke={color} strokeLinecap="round"
+            strokeDasharray={`${circ * 0.75} ${circ * 0.25}`}
+            strokeDashoffset={offset} transform="rotate(135 50 58)"
+            style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.34,1.56,0.64,1)", filter: `drop-shadow(0 0 6px ${color}88)` }} />
+        )}
+        <text x="50" y="62" textAnchor="middle"
+          style={{ fontFamily: "'Poppins',sans-serif", fontSize: "1.5rem", fontWeight: 700, fill: color }}>
+          {value !== null ? value : "–"}
+        </text>
+        <text x="50" y="74" textAnchor="middle"
+          style={{ fontFamily: "'Nunito',sans-serif", fontSize: "0.32rem", letterSpacing: "0.15em", fill: "#9ca3af", textTransform: "uppercase" }}>
+          {label}
+        </text>
+      </svg>
+      <div style={{ fontSize: "0.62rem", color, fontFamily: "'Nunito',sans-serif", letterSpacing: "0.08em", marginTop: "-4px" }}>
+        {getAnxietyLabel(value)}
       </div>
     </div>
   );
-};
+}
 
-const FutureBubbleProgress = ({ trait }) => {
-  const Icon = TRAIT_ICONS[trait.trait] || Sparkles;
-  const growth = trait.future - trait.current;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-      <CircularProgress value={trait.future} color="#c084fc" size={112} strokeWidth={8}>
-        <Icon style={{ width: 32, height: 32, color: "#e9d5ff" }} />
-      </CircularProgress>
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', textShadow: '0 0 6px #c084fc', margin: 0 }}>
-          {trait.trait}
-        </p>
-        <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e9d5ff', textShadow: '0 0 8px #c084fc', margin: '0.25rem 0' }}>
-          {trait.future}%
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
-          <Sparkles style={{ width: 16, height: 16, color: '#c084fc' }} />
-          <span style={{ fontSize: '0.75rem', color: '#c084fc', fontWeight: '600' }}>+{growth}%</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SkillBubbleBar = ({ skill }) => {
-  const percentage = (skill.xp / skill.maxXp) * 100;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#f5f3ff', textShadow: '0 0 4px #e879f9' }}>
-          {skill.name}
-        </span>
-        <span style={{ fontSize: '0.75rem', color: '#e9d5ff' }}>
-          {skill.xp} / {skill.maxXp} XP
-        </span>
-      </div>
-      <div style={{ position: 'relative', height: '1.25rem', background: 'rgba(107, 33, 168, 0.3)', borderRadius: '9999px', overflow: 'hidden', border: '1px solid rgba(192, 132, 252, 0.4)' }}>
-        <div
-          style={{
-            height: '100%',
-            width: `${percentage}%`,
-            background: `linear-gradient(90deg, ${skill.color}, ${skill.color}dd)`,
-            boxShadow: `0 0 20px ${skill.color}`,
-            borderRadius: '9999px',
-            transition: 'width 1.5s ease-out',
-          }}
-        />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <span style={{ color: skill.color, fontWeight: 'bold', textShadow: `0 0 6px ${skill.color}` }}>
-          Level {skill.level}
-        </span>
-        <span style={{ color: '#e9d5ff', fontWeight: '600' }}>
-          {Math.round(percentage)}%
-        </span>
-      </div>
-    </div>
-  );
-};
-
-const MiniTrendChart = ({ data, color }) => {
-  const chartData = data.map((value, index) => ({ name: index, value }));
-
-  return (
-    <ResponsiveContainer width="100%" height={50}>
-      <AreaChart data={chartData}>
-        <defs>
-          <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.7} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.2} />
-          </linearGradient>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={3}
-          fill={`url(#gradient-${color})`}
-          animationDuration={1200}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-};
-
-const StatBubble = ({ icon: Icon, value, label, color }) => {
-  const [isHovered, setIsHovered] = useState(false);
+// ── Bar Column ──────────────────────────────────────────────────────────────
+function BarColumn({ data, idx, onClick, isToday }) {
+  const preH = data.preLevel !== null ? `${(data.preLevel / 10) * 100}%` : "0%";
+  const postH = data.postLevel !== null ? `${(data.postLevel / 10) * 100}%` : "0%";
 
   return (
     <div
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '0.5rem',
-        background: 'rgba(107, 33, 168, 0.3)',
-        backdropFilter: 'blur(16px)',
-        borderRadius: '1.5rem',
-        padding: '1rem',
-        border: '2px solid rgba(192, 132, 252, 0.5)',
-        minWidth: '100px',
-        cursor: 'pointer',
-        transition: 'transform 0.2s, box-shadow 0.3s',
-        transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-        boxShadow: isHovered ? `0 0 25px ${color}` : 'none',
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem",
+        flex: 1, cursor: "pointer", padding: "0.5rem 0.25rem",
+        borderRadius: "10px", transition: "all 0.2s",
+        background: isToday ? "rgba(124,58,237,0.06)" : "transparent",
+        border: isToday ? "1px solid rgba(124,58,237,0.2)" : "1px solid transparent",
       }}
+      onClick={() => onClick(idx)}
     >
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: `${color}40`,
-          border: `2px solid ${color}`,
-        }}
-      >
-        <Icon style={{ width: 24, height: 24, color }} />
-      </div>
-      <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color, textShadow: `0 0 8px ${color}` }}>
-        {value}
-      </span>
-      <span style={{ fontSize: '0.75rem', color: '#f0abfc', textAlign: 'center' }}>{label}</span>
-    </div>
-  );
-};
-
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-export default function ProfileView() {
-  const [loading, setLoading] = useState(true);
-  const [traits, setTraits] = useState([]);
-  const [skills, setSkills] = useState([]);
-  const [actions, setActions] = useState([]);
-  const [challenges, setChallenges] = useState([]);
-  const [milestones, setMilestones] = useState([]);
-  const [frequencyData, setFrequencyData] = useState([]);
-  const [timelineEvents, setTimelineEvents] = useState([]);
-  const [currentArchetype, setCurrentArchetype] = useState("observer");
-  const [futureArchetype, setFutureArchetype] = useState("connector");
-  const [reflectionMood, setReflectionMood] = useState(null);
-  const [hoveredMood, setHoveredMood] = useState(null);
-  const [user, setUser] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-  const [totalXp, setTotalXp] = useState(0);
-  const [currentStreak, setCurrentStreak] = useState(0);
-  const [totalActions, setTotalActions] = useState(0);
-  const [showOnboardingOverlay, setShowOnboardingOverlay] = useState(true);
-
-  const [aboutMe, setAboutMe] = useState({
-  story: '',
-  currentGoals: [],
-  workingOn: [],
-  values: [],
-  interests: []
-});
-const [toolbox, setToolbox] = useState({
-  copingStrategies: [],
-  skillsInventory: []
-});
-const [patterns, setPatterns] = useState({
-  triggers: [],
-  whatWorks: [],
-  warningSignals: []
-});
-const [personalDev, setPersonalDev] = useState({
-  strengths: [],
-  values: [],
-  selfCompassion: []
-});
-const [lifeSkills, setLifeSkills] = useState([]);
-const [beforeAfter, setBeforeAfter] = useState({
-  initial: {},
-  current: {}
-});
-const [editMode, setEditMode] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(!currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (user?.uid) {
-      checkOnboardingStatus();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    console.log('🚀 Initializing Mixpanel...');
-    mixpanelService.init();
-  }, []);
-
-  // 2️⃣ Handle authentication (runs once on mount)
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log('👤 Auth state changed:', currentUser?.uid);
-      setUser(currentUser);
-      setLoading(!currentUser);
-      
-      // Identify user in Mixpanel when logged in
-      if (currentUser) {
-        mixpanelService.identifyUser(currentUser.uid, {
-          email: currentUser.email,
-          name: currentUser.displayName,
-          signup_date: currentUser.metadata.creationTime
-        });
-        
-        // Track login
-        mixpanelService.trackLogin(currentUser.uid);
-      }
-    });
-    
-    return () => unsubscribe();
-  }, []); // Empty dependency array - only run once
-
-  // 3️⃣ Check onboarding when user changes
-  useEffect(() => {
-    if (user?.uid) {
-      checkOnboardingStatus();
-    }
-  }, [user]);
-
-  // 4️⃣ Track profile view when data loads
-  useEffect(() => {
-    if (user?.uid && !loading && !showOnboarding) {
-      console.log('📊 Tracking profile view...');
-      mixpanelService.trackProfileView(user.uid);
-    }
-  }, [user, loading, showOnboarding]);
-  
-
-  const checkOnboardingStatus = async () => {
-    if (!user?.uid) return;
-    
-    try {
-      setCheckingOnboarding(true);
-      const completed = await socialSkillsServices.onboarding.hasCompletedOnboarding(user.uid);
-      
-      if (!completed) {
-        setShowOnboarding(true);
-        setLoading(false);
-      } else {
-        await loadAllData();
-      }
-    } catch (error) {
-      console.error('Error checking onboarding:', error);
-      setShowOnboarding(true);
-      setLoading(false);
-    } finally {
-      setCheckingOnboarding(false);
-    }
-  };
-
-  const loadAllData = async () => {
-    if (!user?.uid) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const [
-        traitsData,
-        skillsData,
-        actionsData,
-        challengesData,
-        milestonesData,
-        archetypeData,
-        frequencyData,
-        timelineData,
-        aboutMeData,
-        toolboxData,
-        patternsData,
-        personalDevData,
-        lifeSkillsData,
-        beforeAfterData
-      ] = await Promise.all([
-        socialSkillsServices.traits.getTraits(user.uid),
-        socialSkillsServices.skills.getSkills(user.uid),
-        socialSkillsServices.actions.getActions(user.uid),
-        socialSkillsServices.challenges.getChallenges(user.uid),
-        socialSkillsServices.milestones.getMilestones(user.uid),
-        socialSkillsServices.archetypes.getUserArchetype(user.uid),
-        socialSkillsServices.actions.getActionFrequency(user.uid),
-        socialSkillsServices.timeline.getTimelineEvents(user.uid),
-         socialSkillsServices.profile.getAboutMe(user.uid),
-        socialSkillsServices.profile.getToolbox(user.uid),
-        socialSkillsServices.profile.getPatterns(user.uid),
-        socialSkillsServices.profile.getPersonalDev(user.uid),
-        socialSkillsServices.profile.getLifeSkills(user.uid),
-        socialSkillsServices.profile.getBeforeAfter(user.uid)
-      ]);
-
-      const traitsArray = Object.entries(traitsData)
-        .filter(([key]) => key !== 'updatedAt')
-        .map(([key, value]) => ({
-          trait: key.charAt(0).toUpperCase() + key.slice(1),
-          ...value
-        }));
-
-      setTraits(traitsArray);
-      setSkills(skillsData);
-      setActions(actionsData);
-      setChallenges(challengesData);
-      setMilestones(milestonesData);
-      setCurrentArchetype(archetypeData.current || 'observer');
-      setFutureArchetype(archetypeData.future || 'connector');
-      setFrequencyData(frequencyData);
-      setTimelineEvents(timelineData);
-      setAboutMe(aboutMeData);
-      setToolbox(toolboxData);
-      setPatterns(patternsData);
-      setPersonalDev(personalDevData);
-      setLifeSkills(lifeSkillsData);
-      setBeforeAfter(beforeAfterData);
-
-      const calculatedTotalXp = skillsData.reduce((sum, skill) => sum + (skill.xp || 0), 0);
-      const calculatedStreak = actionsData.length > 0 ? 12 : 0;
-      
-      setTotalXp(calculatedTotalXp);
-      setTotalActions(actionsData.length);
-      setCurrentStreak(calculatedStreak);
-
-    } catch (error) {
-      console.error('Error loading data:', error);
-      setTraits([]);
-      setSkills([]);
-      setActions([]);
-      setChallenges([]);
-      setMilestones([]);
-      setFrequencyData([]);
-      setTimelineEvents([]);
-      setCurrentArchetype('observer');
-      setFutureArchetype('connector');
-      alert('Failed to load your data. Please refresh the page.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-// Updated handleOnboardingComplete function with Mixpanel tracking
-const handleOnboardingComplete = async (profileData) => {
-  try {
-    setLoading(true);
-    await socialSkillsServices.onboarding.saveOnboardingResults(user.uid, profileData);
-
-    // Track with Firebase Analytics (keep existing)
-    logEvent(analytics, 'quiz_completed', {
-      user_id: user.uid,
-      archetype: profileData.archetype || null,
-      timestamp: new Date().toISOString()
-    });
-
-    // 🎯 MIXPANEL: Track Profile Quiz Completion
-    mixpanelService.trackProfileQuizDone({
-      userId: user.uid,
-      archetypeCurrent: profileData.archetypeCurrent || currentArchetype,
-      archetypeFuture: profileData.archetypeFuture || futureArchetype,
-      quizDuration: profileData.quizDuration || null,
-      traitsSelected: profileData.traitsSelected || [],
-      totalQuestions: profileData.totalQuestions || 10
-    });
-
-    setShowOnboarding(false);
-    await loadAllData();
-
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 5000);
-  } catch (error) {
-    console.error('Error completing onboarding:', error);
-    alert('Failed to save your profile. Please try again.');
-    setLoading(false);
-  }
-};
-
-// Updated handleChallengeComplete with Mixpanel tracking
-const handleChallengeComplete = async (challengeId) => {
-  if (!user?.uid) return;
-  
-  try {
-    // Find the challenge before completing it
-    const challenge = challenges.find(c => c.id === challengeId);
-    
-    await socialSkillsServices.challenges.completeChallenge(user.uid, challengeId);
-    
-    // 🎯 MIXPANEL: Track Challenge Completion
-    if (challenge) {
-      mixpanelService.trackChallengeCompleted({
-        challengeId: challenge.id,
-        title: challenge.title,
-        xp: challenge.xp,
-        streak: challenge.streak || 0
-      });
-    }
-    
-    const updatedChallenges = await socialSkillsServices.challenges.getChallenges(user.uid);
-    setChallenges(updatedChallenges);
-  } catch (error) {
-    console.error('Error completing challenge:', error);
-    alert('Failed to complete challenge');
-  }
-};
-
-// Add tracking for reflection mood selection
-const handleReflectionMoodSelect = (mood) => {
-  setReflectionMood(mood);
-  
-  // 🎯 MIXPANEL: Track Weekly Reflection
-  mixpanelService.trackReflectionMood({
-    mood: mood,
-    weekNumber: Math.ceil(new Date().getDate() / 7)
-  });
-};
-
-
-
-  if (!user) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #6b21a8, #7c3aed, #5b21b6)', 
-        color: '#fff', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        padding: '2rem' 
-      }}>
-        <div style={{ 
-          textAlign: 'center',
-          maxWidth: '400px',
-          background: 'rgba(107, 33, 168, 0.3)',
-          backdropFilter: 'blur(20px)',
-          border: '2px solid rgba(192, 132, 252, 0.5)',
-          borderRadius: '2rem',
-          padding: '3rem 2rem',
-          boxShadow: '0 10px 40px rgba(192, 132, 252, 0.4)',
-        }}>
-          <div style={{ fontSize: '4rem', marginBottom: '1rem', textShadow: '0 0 15px #e879f9' }}>🔒</div>
-          <h2 style={{ 
-            fontSize: '1.75rem', 
-            color: '#f5f3ff', 
-            marginBottom: '0.5rem',
-            fontWeight: 'bold',
-            textShadow: '0 0 8px #e879f9'
+      <div style={{ display: "flex", gap: "3px", height: "100px", alignItems: "flex-end", width: "100%", maxWidth: "48px" }}>
+        {[
+          { h: preH, color: getAnxietyColor(data.preLevel), opacity: 0.8 },
+          { h: postH, color: data.postLevel !== null ? getAnxietyColor(data.postLevel) : '#374151', opacity: 0.6 }
+        ].map((b, bi) => (
+          <div key={bi} style={{
+            flex: 1, height: "100px", background: "rgba(124,58,237,0.08)",
+            borderRadius: "4px 4px 0 0", position: "relative", overflow: "hidden"
           }}>
-            Welcome to Social Growth Journey
-          </h2>
-          <p style={{ 
-            fontSize: '1rem', 
-            color: '#e9d5ff',
-            marginBottom: '2rem',
-            textShadow: '0 0 6px #c084fc'
-          }}>
-            Sign in to track your social skills transformation
-          </p>
-          <GoogleSignIn />
-        </div>
-      </div>
-    );
-  }
-
-  if (checkingOnboarding) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #6b21a8, #7c3aed, #5b21b6)', 
-        color: '#fff', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center' 
-      }}>
-        <div style={{ 
-          textAlign: 'center',
-          background: 'rgba(107, 33, 168, 0.3)',
-          backdropFilter: 'blur(20px)',
-          border: '2px solid rgba(192, 132, 252, 0.4)',
-          borderRadius: '2rem',
-          padding: '2rem',
-          boxShadow: '0 10px 40px rgba(192, 132, 252, 0.3)',
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem', textShadow: '0 0 10px #e879f9' }}>🔍</div>
-          <p style={{ fontSize: '1.5rem', color: '#e9d5ff', textShadow: '0 0 6px #c084fc' }}>Checking your profile...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (showOnboarding) {
-    return <SocialOnboardingQuiz onComplete={handleOnboardingComplete} />;
-  }
-
-  if (loading) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #6b21a8, #7c3aed, #5b21b6)', 
-        color: '#fff', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center' 
-      }}>
-        <div style={{ 
-          textAlign: 'center',
-          background: 'rgba(107, 33, 168, 0.3)',
-          backdropFilter: 'blur(20px)',
-          border: '2px solid rgba(192, 132, 252, 0.4)',
-          borderRadius: '2rem',
-          padding: '2rem',
-          boxShadow: '0 10px 40px rgba(192, 132, 252, 0.3)',
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem', textShadow: '0 0 10px #e879f9' }}>⏳</div>
-          <p style={{ fontSize: '1.5rem', color: '#e9d5ff', textShadow: '0 0 6px #c084fc' }}>Loading your journey...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ 
-      minHeight: '100vh',
-      color: '#fff',
-      overflowX: 'hidden',
-      paddingBottom: '2rem',
-      position: 'relative',
-      background: 'linear-gradient(135deg, rgba(107, 33, 168, 0.7), rgba(124, 58, 237, 0.6), rgba(91, 33, 182, 0.5))',
-      backdropFilter: 'blur(30px)',
-      WebkitBackdropFilter: 'blur(30px)',
-      boxShadow: 'inset 0 0 150px rgba(255,255,255,0.08)'
-    }}>
-      <ParticleBackground />
-
-      {/* Header */}
-      <header style={{
-        borderBottom: '2px solid rgba(192, 132, 252, 0.3)',
-        background: 'rgba(107, 33, 168, 0.5)',
-        backdropFilter: 'blur(25px)',
-        WebkitBackdropFilter: 'blur(25px)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 40,
-        borderRadius: '0 0 1.5rem 1.5rem',
-        boxShadow: '0 8px 32px rgba(192, 132, 252, 0.4)',
-      }}>
-        <div style={{ 
-          maxWidth: '1200px', 
-          margin: '0 auto', 
-          padding: '1.5rem', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '1rem', 
-          position: 'relative', 
-          zIndex: 10 
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: '0.5rem', 
-              marginBottom: '0.75rem', 
-              padding: '0.5rem 1rem', 
-              background: 'rgba(192, 132, 252, 0.35)', 
-              backdropFilter: 'blur(12px)', 
-              WebkitBackdropFilter: 'blur(12px)',
-              borderRadius: '9999px', 
-              border: '1px solid rgba(233, 121, 249, 0.4)',
-              boxShadow: '0 4px 20px rgba(233, 121, 249, 0.4)',
-            }}>
-              <Sparkles style={{ width: 16, height: 16, color: '#f0abfc' }} />
-              <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#f5f3ff', textShadow: '0 0 8px #e879f9' }}>
-                Social Skills Mastery Platform
-              </span>
-            </div>
-            
-            <h1 style={{
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              background: 'linear-gradient(90deg, #f5f3ff, #e879f9, #f0abfc)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              margin: 0,
-              marginBottom: '0.5rem',
-              textShadow: '0 0 10px #e879f9',
-            }}>
-              Social Growth Journey
-            </h1>
-            <p style={{ fontSize: '0.875rem', color: '#e9d5ff', margin: '0.25rem 0 0 0', textShadow: '0 0 6px #c084fc' }}>
-              Track your transformation and unlock your potential
-            </p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <StatBubble icon={Flame} value={currentStreak} label="Streak" color="#f0abfc" />
-            <StatBubble icon={Zap} value={totalXp.toLocaleString()} label="XP" color="#e879f9" />
-            <StatBubble icon={Trophy} value={totalActions} label="Actions" color="#c084fc" />
-          </div>
-        </div>
-      </header>
-
-      <div style={{ 
-        maxWidth: '1200px', 
-        margin: '0 auto', 
-        padding: '2rem 1rem', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '2rem', 
-        position: 'relative', 
-        zIndex: 10 
-      }}>
-        
-        {/* Welcome Overlay */}
-        {showOnboardingOverlay && ReactDOM.createPortal(
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-            <div className="bg-gradient-to-br from-purple-900/95 to-indigo-900/95 backdrop-blur-xl p-6 md:p-8 rounded-3xl border-2 border-purple-500/50 shadow-2xl max-w-md w-full">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
-                  <User className="w-8 h-8 text-white" />
-                </div>
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Welcome to Your Profile! ✨</h2>
-                <p className="text-purple-200 text-sm md:text-base">Showcase your journey and track your progress</p>
-              </div>
-              <div className="space-y-4 mb-6">
-                <div className="flex items-start gap-3 p-4 bg-purple-950/50 rounded-xl border border-purple-500/30">
-                  <Target className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-bold text-white text-sm mb-1">Track Your Goals</h3>
-                    <p className="text-purple-300 text-xs">Monitor your progress and celebrate milestones</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-purple-950/50 rounded-xl border border-purple-500/30">
-                  <Activity className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-bold text-white text-sm mb-1">View Your Stats</h3>
-                    <p className="text-purple-300 text-xs">See your activity, achievements, and growth over time</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-purple-950/50 rounded-xl border border-purple-500/30">
-                  <Star className="w-5 h-5 text-pink-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-bold text-white text-sm mb-1">Customize Your Space</h3>
-                    <p className="text-purple-300 text-xs">Personalize your profile and make it uniquely yours</p>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowOnboardingOverlay(false)}
-                className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-bold text-white transition-all shadow-xl"
-              >
-                Explore My Profile! 🚀
-              </button>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* Empty state */}
-        {traits.length === 0 && skills.length === 0 && actions.length === 0 && (
-          <GlassCard>
-            <div style={{ textAlign: 'center', padding: '3rem' }}>
-              <div style={{ fontSize: '4rem', marginBottom: '1rem', textShadow: '0 0 12px #e879f9' }}>🌱</div>
-              <h2 style={{ fontSize: '1.5rem', color: '#e879f9', marginBottom: '1rem', textShadow: '0 0 6px #c084fc' }}>
-                Start Your Journey
-              </h2>
-              <p style={{ color: '#f5f3ff', marginBottom: '2rem' }}>
-                Your social skills profile is empty. Start tracking your progress to see your growth!
-              </p>
-              <button
-                onClick={loadAllData}
-                style={{
-                  padding: '1rem 2rem',
-                  background: 'linear-gradient(90deg, #c084fc, #e879f9)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '1rem',
-                  fontSize: '1rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 20px rgba(192, 132, 252, 0.5)',
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-              >
-                Refresh Data
-              </button>
-            </div>
-          </GlassCard>
-        )}
-
-        {/* SECTION 1: Current vs Future Self */}
-        {traits.length > 0 && (
-          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-            {/* Current Self */}
-            <GlassCard>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e879f9', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                      <Users style={{ width: 24, height: 24, color: '#e879f9' }} />
-                      Current Self
-                    </h2>
-                    <p style={{ fontSize: '0.875rem', color: '#f5f3ff', margin: '0.25rem 0 0 0' }}>
-                      Where you are today
-                    </p>
-                  </div>
-                  <div style={{ fontSize: '3rem', textShadow: '0 0 12px #e879f9' }}>
-                    {ARCHETYPES[currentArchetype]?.icon || '👁️'}
-                  </div>
-                </div>
-
-                <div style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1.5rem', padding: '1rem', border: '2px solid rgba(192, 132, 252, 0.5)', boxShadow: '0 4px 25px rgba(192,132,252,0.3)' }}>
-                  <p style={{ fontSize: '0.875rem', lineHeight: '1.6', margin: 0, color: '#f5f3ff' }}>
-                    <strong style={{ color: '#f0abfc' }}>Personality:</strong>{" "}
-                    You're consistent but shy in new groups. You prefer one-on-one conversations and excel at listening.
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-                    {ARCHETYPES[currentArchetype]?.traits.map((trait) => (
-                      <span
-                        key={trait}
-                        style={{
-                          padding: '0.375rem 0.75rem',
-                          background: 'rgba(233, 121, 249, 0.35)',
-                          color: '#f5f3ff',
-                          fontSize: '0.75rem',
-                          borderRadius: '9999px',
-                          border: '2px solid rgba(240, 171, 252, 0.5)',
-                          fontWeight: '600',
-                          textShadow: '0 0 4px #e879f9',
-                        }}
-                      >
-                        {trait}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f5f3ff', margin: '0 0 1.5rem 0' }}>
-                    <TrendingUp style={{ width: 20, height: 20, color: '#e879f9' }} />
-                    Your Skills Today
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '1.5rem' }}>
-                    {traits.map((trait, idx) => (
-                      <BubbleProgress key={idx} trait={trait} />
-                    ))}
-                  </div>
-                </div>
-
-                {traits.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                    <div style={{ background: 'rgba(233, 121, 249, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(240, 171, 252, 0.5)', boxShadow: '0 4px 20px rgba(233,121,249,0.3)' }}>
-                      <Award style={{ width: 24, height: 24, color: '#f0abfc', marginBottom: '0.5rem' }} />
-                      <p style={{ fontSize: '0.75rem', color: '#f5f3ff', margin: 0 }}>Strongest</p>
-                      <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginTop: '0.25rem' }}>
-                        {traits.reduce((max, t) => t.current > max.current ? t : max, traits[0])?.trait || 'N/A'}
-                      </p>
-                      <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#f0abfc', margin: 0 }}>
-                        {traits.reduce((max, t) => t.current > max.current ? t : max, traits[0])?.current || 0}%
-                      </p>
-                    </div>
-                    <div style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(233, 121, 249, 0.5)', boxShadow: '0 4px 20px rgba(192,132,252,0.3)' }}>
-                      <Target style={{ width: 24, height: 24, color: '#e879f9', marginBottom: '0.5rem' }} />
-                      <p style={{ fontSize: '0.75rem', color: '#f5f3ff', margin: 0 }}>Focus Area</p>
-                      <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#e879f9', marginTop: '0.25rem' }}>
-                        {traits.reduce((min, t) => t.current < min.current ? t : min, traits[0])?.trait || 'N/A'}
-                      </p>
-                      <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#e879f9', margin: 0 }}>
-                        {traits.reduce((min, t) => t.current < min.current ? t : min, traits[0])?.current || 0}%
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </GlassCard>
-
-            {/* Future Self */}
-            <GlassCard>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                      <Sparkles style={{ width: 24, height: 24, color: '#c084fc' }} />
-                      Future Self
-                    </h2>
-                    <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-                      Your transformation
-                    </p>
-                  </div>
-                  <div style={{ fontSize: '3rem' }}>
-                    {ARCHETYPES[futureArchetype]?.icon || '🤝'}
-                  </div>
-                </div>
-
-                <div style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1.5rem', padding: '1rem', border: '2px solid rgba(233, 121, 249, 0.5)' }}>
-                  <p style={{ fontSize: '0.875rem', lineHeight: '1.6', margin: 0, color: '#f5f3ff' }}>
-                    <strong style={{ color: '#e9d5ff' }}>Projection:</strong> Based on your streak and XP, you're becoming a natural connector. You'll confidently start conversations and build meaningful relationships.
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-                    {ARCHETYPES[futureArchetype]?.traits.map((trait) => (
-                      <span
-                        key={trait}
-                        style={{
-                          padding: '0.375rem 0.75rem',
-                          background: 'rgba(192, 132, 252, 0.35)',
-                          color: '#f5f3ff',
-                          fontSize: '0.75rem',
-                          borderRadius: '9999px',
-                          border: '2px solid rgba(233, 121, 249, 0.5)',
-                          fontWeight: '600',
-                        }}
-                      >
-                        {trait}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 1.5rem 0', color: '#f5f3ff' }}>
-                    <ArrowRight style={{ width: 20, height: 20, color: '#c084fc' }} />
-                    Projected Growth
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '1.5rem' }}>
-                    {traits.map((trait, idx) => (
-                      <FutureBubbleProgress key={idx} trait={trait} />
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', margin: 0 }}>
-                    Suggested New Habits
-                  </p>
-                  {[
-                    "Start 1 conversation daily with someone new",
-                    "Practice assertiveness in groups",
-                    "Join a social hobby or club",
-                  ].map((habit, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.5rem',
-                        fontSize: '0.875rem',
-                        background: 'rgba(192, 132, 252, 0.2)',
-                        padding: '0.75rem',
-                        borderRadius: '1rem',
-                        border: '2px solid rgba(233, 121, 249, 0.5)',
-                        color: '#f5f3ff',
-                      }}
-                    >
-                      <CheckCircle style={{ width: 16, height: 16, color: '#e879f9', marginTop: '0.125rem', flexShrink: 0 }} />
-                      <span>{habit}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </GlassCard>
-          </section>
-        )}
-
-        {/* SECTION 2: Skill Progression */}
-        {skills.length > 0 && (
-          <section>
-            
-          </section>
-        )}
-
-        {/* SECTION 3: Challenges */}
-        {challenges.length > 0 && (
-          <section>
-            <GlassCard>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e879f9', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                    <Target style={{ width: 24, height: 24 }} />
-                    Active Challenges
-                  </h2>
-                  <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-                    Complete to level up faster
-                  </p>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-                  {challenges.map((challenge) => (
-                    <div
-                      key={challenge.id}
-                      style={{
-                        padding: '1.25rem',
-                        borderRadius: '1.5rem',
-                        border: '2px solid',
-                        borderColor: challenge.completed ? '#f0abfc' : 'rgba(233, 121, 249, 0.4)',
-                        background: challenge.completed ? 'rgba(240, 171, 252, 0.25)' : 'rgba(192, 132, 252, 0.2)',
-                        transition: 'all 0.3s',
-                        cursor: challenge.completed ? 'default' : 'pointer',
-                        boxShadow: '0 4px 15px rgba(192, 132, 252, 0.2)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!challenge.completed) {
-                          e.currentTarget.style.transform = 'translateY(-3px)';
-                          e.currentTarget.style.borderColor = '#f0abfc';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!challenge.completed) {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.borderColor = 'rgba(233, 121, 249, 0.4)';
-                        }
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                        <div style={{ fontSize: '2.5rem' }}>{challenge.badge}</div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <Zap style={{ width: 16, height: 16, color: '#e879f9' }} />
-                            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#e879f9' }}>
-                              +{challenge.xp}
-                            </span>
-                          </div>
-                          {challenge.streak > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
-                              <Flame style={{ width: 12, height: 12, color: '#f0abfc' }} />
-                              <span style={{ fontSize: '0.75rem', color: '#f0abfc', fontWeight: '600' }}>
-                                {challenge.streak} days
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <p style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: '#f5f3ff' }}>
-                        {challenge.title}
-                      </p>
-
-                      {challenge.target && (
-                        <div style={{ marginBottom: '0.75rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#e9d5ff', marginBottom: '0.25rem' }}>
-                            <span>Progress</span>
-                            <span>{challenge.progress || 0} / {challenge.target}</span>
-                          </div>
-                          <div style={{ height: '8px', background: 'rgba(192, 132, 252, 0.3)', borderRadius: '9999px', overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                height: '100%',
-                                width: `${Math.min(((challenge.progress || 0) / challenge.target) * 100, 100)}%`,
-                                background: 'linear-gradient(90deg, #e879f9, #f0abfc)',
-                                borderRadius: '9999px',
-                                transition: 'width 0.5s ease-out',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <button
-                        onClick={() => handleChallengeComplete(challenge.id)}
-                        disabled={challenge.completed}
-                        style={{
-                          width: '100%',
-                          padding: '0.75rem 1rem',
-                          borderRadius: '1rem',
-                          fontWeight: 'bold',
-                          fontSize: '1rem',
-                          transition: 'all 0.3s',
-                          cursor: challenge.completed ? 'default' : 'pointer',
-                          background: challenge.completed ? 'rgba(240, 171, 252, 0.4)' : 'linear-gradient(90deg, #c084fc, #e879f9)',
-                          color: '#fff',
-                          border: 'none',
-                          opacity: challenge.completed ? 0.7 : 1,
-                          boxShadow: challenge.completed ? 'none' : '0 4px 12px rgba(233, 121, 249, 0.4)',
-                        }}
-                      >
-                        {challenge.completed ? "✓ Completed" : "Mark Complete"}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </GlassCard>
-          </section>
-        )}
-
-        {/* SECTION 4: Reflection */}
-        <section>
-          <GlassCard>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f0abfc', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                  <Heart style={{ width: 24, height: 24 }} />
-                  Weekly Reflection
-                </h2>
-                <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-                  How do you feel about your progress?
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                {[
-                  { mood: "amazing", emoji: "🤩", label: "Amazing!", color: "#f0abfc" },
-                  { mood: "good", emoji: "😊", label: "Good", color: "#e879f9" },
-                  { mood: "okay", emoji: "😐", label: "Okay", color: "#c084fc" },
-                  { mood: "struggling", emoji: "😔", label: "Struggling", color: "#e9d5ff" },
-                ].map(({ mood, emoji, label, color }) => {
-                  const isHovered = hoveredMood === mood;
-                  
-                  return (
-                    <button
-                      key={mood}
-                      onClick={() => setReflectionMood(mood)}
-                      onMouseEnter={() => setHoveredMood(mood)}
-                      onMouseLeave={() => setHoveredMood(null)}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        padding: '1rem',
-                        borderRadius: '1.5rem',
-                        border: '2px solid',
-                        borderColor: reflectionMood === mood ? color : (isHovered && reflectionMood !== mood ? `${color}80` : 'rgba(233, 121, 249, 0.4)'),
-                        background: reflectionMood === mood ? `${color}30` : 'rgba(192, 132, 252, 0.2)',
-                        minWidth: '90px',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s',
-                        transform: reflectionMood === mood ? 'scale(1.05)' : (isHovered ? 'scale(1.1)' : 'scale(1)'),
-                        boxShadow: isHovered || reflectionMood === mood ? `0 6px 15px ${color}50` : '0 2px 8px rgba(192, 132, 252, 0.2)',
-                      }}
-                    >
-                      <div style={{ fontSize: '2.5rem' }}>{emoji}</div>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f5f3ff' }}>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {reflectionMood && (
-                <div
-                  style={{
-                    background: 'rgba(233, 121, 249, 0.2)',
-                    padding: '1rem',
-                    borderRadius: '1.5rem',
-                    border: '2px solid rgba(240, 171, 252, 0.5)',
-                  }}
-                >
-                  <p style={{ fontSize: '0.875rem', margin: 0, color: '#f5f3ff' }}>
-                    <strong style={{ color: '#f0abfc' }}>
-                      Based on your reflection:
-                    </strong>{" "}
-                    {reflectionMood === "amazing"
-                      ? "You're on fire! Keep this momentum!"
-                      : reflectionMood === "good"
-                        ? "Great progress! Try one harder challenge."
-                        : reflectionMood === "okay"
-                          ? "Steady progress is still progress. Keep going!"
-                          : "It's okay to have tough weeks. Let's adjust your goals."}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* 🧪 TEST BUTTON - Remove after testing */}
-
-          </GlassCard>
-        </section>
-
-        {/* SECTION 5: About Me */}
-<section>
-  <GlassCard>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e879f9', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-            <User style={{ width: 24, height: 24 }} />
-            About Me
-          </h2>
-          <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-            My journey and what drives me
-          </p>
-        </div>
-        <button
-          onClick={() => setEditMode(!editMode)}
-          style={{
-            padding: '0.5rem 1rem',
-            background: 'rgba(192, 132, 252, 0.3)',
-            border: '2px solid rgba(233, 121, 249, 0.5)',
-            borderRadius: '0.75rem',
-            color: '#f5f3ff',
-            cursor: 'pointer'
-          }}
-        >
-          {editMode ? 'Save' : 'Edit'}
-        </button>
-      </div>
-
-      {/* Personal Story */}
-      <div style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(233, 121, 249, 0.4)' }}>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginBottom: '0.5rem' }}>My Story</p>
-        {editMode ? (
-          <textarea
-            value={aboutMe.story}
-            onChange={(e) => setAboutMe({...aboutMe, story: e.target.value})}
-            placeholder="Share your journey..."
-            style={{ width: '100%', minHeight: '100px', background: 'rgba(107, 33, 168, 0.3)', border: '1px solid rgba(192, 132, 252, 0.4)', borderRadius: '0.5rem', padding: '0.75rem', color: '#f5f3ff' }}
-          />
-        ) : (
-          <p style={{ fontSize: '0.875rem', color: '#f5f3ff', margin: 0 }}>
-            {aboutMe.story || 'Click Edit to add your story...'}
-          </p>
-        )}
-      </div>
-
-      {/* Current Goals */}
-      <div>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginBottom: '0.75rem' }}>Current Goals</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {aboutMe.currentGoals.map((goal, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(192, 132, 252, 0.2)', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(233, 121, 249, 0.4)' }}>
-              <Target style={{ width: 16, height: 16, color: '#e879f9' }} />
-              <span style={{ fontSize: '0.875rem', color: '#f5f3ff' }}>{goal}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Values & Interests Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-        <div>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginBottom: '0.5rem' }}>My Values</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {aboutMe.values.map((value, idx) => (
-              <span key={idx} style={{ padding: '0.5rem 0.75rem', background: 'rgba(233, 121, 249, 0.3)', borderRadius: '9999px', fontSize: '0.75rem', color: '#f5f3ff', border: '1px solid rgba(240, 171, 252, 0.5)' }}>
-                {value}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginBottom: '0.5rem' }}>Interests</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {aboutMe.interests.map((interest, idx) => (
-              <span key={idx} style={{ padding: '0.5rem 0.75rem', background: 'rgba(192, 132, 252, 0.3)', borderRadius: '9999px', fontSize: '0.75rem', color: '#f5f3ff', border: '1px solid rgba(233, 121, 249, 0.5)' }}>
-                {interest}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  </GlassCard>
-</section>
-
-{/* SECTION 6: Progress Journey Timeline */}
-<section>
-  <GlassCard>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e879f9', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <Calendar style={{ width: 24, height: 24 }} />
-          Progress Journey
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-          Your transformation over time
-        </p>
-      </div>
-
-      {/* Before & After Comparison */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-        <div style={{ background: 'rgba(239, 68, 68, 0.15)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(239, 68, 68, 0.4)' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#fca5a5', marginBottom: '0.75rem' }}>📍 Starting Point</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.75rem', color: '#f5f3ff' }}>Anxiety Level</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#fca5a5' }}>{beforeAfter.initial.anxietyLevel || 8}/10</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.75rem', color: '#f5f3ff' }}>Avoided Situations</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#fca5a5' }}>{beforeAfter.initial.avoidedCount || 15}</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ background: 'rgba(34, 197, 94, 0.15)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(34, 197, 94, 0.4)' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#86efac', marginBottom: '0.75rem' }}>🎯 Current Status</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.75rem', color: '#f5f3ff' }}>Anxiety Level</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#86efac' }}>{beforeAfter.current.anxietyLevel || 4}/10</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.75rem', color: '#f5f3ff' }}>Avoided Situations</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#86efac' }}>{beforeAfter.current.avoidedCount || 3}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Timeline Events */}
-      {timelineEvents.length > 0 && (
-        <div>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginBottom: '1rem' }}>Milestones & Firsts</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative', paddingLeft: '2rem' }}>
-            {/* Timeline line */}
-            <div style={{ position: 'absolute', left: '0.5rem', top: '0.5rem', bottom: '0.5rem', width: '2px', background: 'linear-gradient(180deg, #e879f9, #c084fc)' }} />
-            
-            {timelineEvents.map((event, idx) => (
-              <div key={idx} style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', left: '-1.75rem', top: '0.25rem', width: '1rem', height: '1rem', borderRadius: '50%', background: '#e879f9', border: '2px solid rgba(107, 33, 168, 0.5)', boxShadow: '0 0 8px #e879f9' }} />
-                <div style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(233, 121, 249, 0.4)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
-                    <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', margin: 0 }}>{event.title}</p>
-                    <span style={{ fontSize: '0.75rem', color: '#e9d5ff' }}>{event.date}</span>
-                  </div>
-                  <p style={{ fontSize: '0.75rem', color: '#f5f3ff', margin: 0 }}>{event.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  </GlassCard>
-</section>
-
-
-{/* SECTION 7: My Toolbox */}
-<section>
-  <GlassCard>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f0abfc', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <Zap style={{ width: 24, height: 24 }} />
-          My Toolbox
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-          Strategies and skills that work for me
-        </p>
-      </div>
-
-      {/* Active Coping Strategies */}
-      <div>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#e879f9', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Heart style={{ width: 16, height: 16 }} />
-          Active Coping Strategies
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
-          {toolbox.copingStrategies.map((strategy, idx) => (
-            <div key={idx} style={{ background: 'rgba(233, 121, 249, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(240, 171, 252, 0.5)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ fontSize: '1.5rem' }}>{strategy.icon}</div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', margin: 0 }}>{strategy.name}</p>
-                <p style={{ fontSize: '0.75rem', color: '#e9d5ff', margin: '0.25rem 0 0 0' }}>Used {strategy.useCount} times</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Skills Inventory */}
-      <div>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#c084fc', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Award style={{ width: 16, height: 16 }} />
-          Skills Inventory
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {toolbox.skillsInventory.map((skill, idx) => (
-            <div key={idx} style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(233, 121, 249, 0.4)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', margin: 0 }}>{skill.name}</p>
-                <span style={{ padding: '0.25rem 0.75rem', background: 'rgba(233, 121, 249, 0.3)', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 'bold', color: '#f0abfc' }}>
-                  {skill.level}
-                </span>
-              </div>
-              <div style={{ height: '6px', background: 'rgba(107, 33, 168, 0.3)', borderRadius: '9999px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${skill.progress}%`, background: 'linear-gradient(90deg, #c084fc, #e879f9)', borderRadius: '9999px', transition: 'width 0.5s' }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  </GlassCard>
-</section>
-
-
-{/* SECTION 8: Patterns & Insights */}
-<section>
-  <GlassCard>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e879f9', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <BarChart3 style={{ width: 24, height: 24 }} />
-          Patterns & Insights
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-          Understanding what triggers and helps you
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-        {/* Triggers */}
-        <div style={{ background: 'rgba(239, 68, 68, 0.15)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(239, 68, 68, 0.4)' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#fca5a5', marginBottom: '0.75rem' }}>⚠️ Common Triggers</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {patterns.triggers.map((trigger, idx) => (
-              <div key={idx} style={{ fontSize: '0.75rem', color: '#f5f3ff', padding: '0.5rem', background: 'rgba(239, 68, 68, 0.2)', borderRadius: '0.5rem' }}>
-                • {trigger}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* What Works */}
-        <div style={{ background: 'rgba(34, 197, 94, 0.15)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(34, 197, 94, 0.4)' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#86efac', marginBottom: '0.75rem' }}>✅ What Works</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {patterns.whatWorks.map((strategy, idx) => (
-              <div key={idx} style={{ fontSize: '0.75rem', color: '#f5f3ff', padding: '0.5rem', background: 'rgba(34, 197, 94, 0.2)', borderRadius: '0.5rem' }}>
-                • {strategy}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Warning Signs */}
-      <div style={{ background: 'rgba(251, 191, 36, 0.15)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(251, 191, 36, 0.4)' }}>
-        <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#fde047', marginBottom: '0.75rem' }}>🚨 Warning Signs & Action Plan</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {patterns.warningSignals.map((signal, idx) => (
-            <div key={idx} style={{ fontSize: '0.75rem', color: '#f5f3ff', padding: '0.75rem', background: 'rgba(251, 191, 36, 0.2)', borderRadius: '0.5rem' }}>
-              <strong>{signal.sign}:</strong> {signal.action}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  </GlassCard>
-</section>
-
-
-{/* SECTION 9: Personal Development */}
-<section>
-  <GlassCard>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f0abfc', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <Star style={{ width: 24, height: 24 }} />
-          Personal Development
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-          Strengths, values, and self-compassion
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-        {/* Strengths */}
-        <div style={{ background: 'rgba(192, 132, 252, 0.2)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(233, 121, 249, 0.4)' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#e879f9', marginBottom: '0.75rem' }}>💪 My Strengths</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {personalDev.strengths.map((strength, idx) => (
-              <span key={idx} style={{ padding: '0.5rem 0.75rem', background: 'rgba(233, 121, 249, 0.3)', borderRadius: '9999px', fontSize: '0.75rem', color: '#f5f3ff', border: '1px solid rgba(240, 171, 252, 0.5)' }}>
-                {strength}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Self-Compassion */}
-        <div style={{ background: 'rgba(240, 171, 252, 0.15)', borderRadius: '1rem', padding: '1rem', border: '2px solid rgba(240, 171, 252, 0.4)' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f0abfc', marginBottom: '0.75rem' }}>💝 Self-Compassion Practice</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {personalDev.selfCompassion.map((practice, idx) => (
-              <div key={idx} style={{ fontSize: '0.75rem', color: '#f5f3ff', padding: '0.5rem', background: 'rgba(240, 171, 252, 0.2)', borderRadius: '0.5rem' }}>
-                "{practice}"
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  </GlassCard>
-</section>
-
-{/* SECTION 10: Life Skills Progress */}
-<section>
-  <GlassCard>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <CheckCircle style={{ width: 24, height: 24 }} />
-          Life Skills Progress
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: '#f5f3ff', marginTop: '0.25rem', margin: '0.25rem 0 0 0' }}>
-          Real-world capabilities you're building
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '0.75rem' }}>
-        {lifeSkills.map((skill, idx) => (
-          <div
-            key={idx}
-            style={{
-              background: skill.completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(192, 132, 252, 0.2)',
-              borderRadius: '1rem',
-              padding: '1rem',
-              border: `2px solid ${skill.completed ? 'rgba(34, 197, 94, 0.5)' : 'rgba(233, 121, 249, 0.4)'}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem'
-            }}
-          >
-            <div style={{
-              width: '2rem',
-              height: '2rem',
-              borderRadius: '50%',
-              background: skill.completed ? 'rgba(34, 197, 94, 0.3)' : 'rgba(192, 132, 252, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: `2px solid ${skill.completed ? '#86efac' : '#e879f9'}`
-            }}>
-              {skill.completed ? <CheckCircle style={{ width: 16, height: 16, color: '#86efac' }} /> : <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#e879f9' }} />}
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#f5f3ff', margin: 0 }}>{skill.name}</p>
-              {skill.lastPracticed && (
-                <p style={{ fontSize: '0.75rem', color: '#e9d5ff', margin: '0.25rem 0 0 0' }}>Last: {skill.lastPracticed}</p>
-              )}
-            </div>
+            <motion.div
+              style={{
+                position: "absolute", bottom: 0, left: 0, right: 0,
+                background: b.color, opacity: b.opacity, borderRadius: "4px 4px 0 0",
+                boxShadow: data.preLevel !== null ? `0 0 8px ${b.color}66` : "none",
+              }}
+              initial={{ height: 0 }}
+              animate={{ height: b.h }}
+              transition={{ duration: 0.7, delay: idx * 0.08 + bi * 0.12, ease: [0.34, 1.56, 0.64, 1] }}
+            />
           </div>
         ))}
       </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          fontFamily: "'Poppins',sans-serif", fontWeight: 700,
+          fontSize: "0.65rem", color: isToday ? "#c084fc" : "#9ca3af",
+          letterSpacing: "0.1em"
+        }}>{data.day}</div>
+        <div style={{ fontSize: "0.58rem", color: "#6b7280" }}>{data.date}</div>
+        {data.actionTaken && <div style={{ fontSize: "0.6rem", color: "#4ade80", marginTop: "2px" }}>✓</div>}
+      </div>
     </div>
-  </GlassCard>
-</section>
+  );
+}
 
+// ── Courage Graph ──────────────────────────────────────────────────────────
+function CourageGraph({ weekData }) {
+  const pts = weekData.filter(d => d.preLevel !== null);
+  if (pts.length < 2) return (
+    <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "#6b7280", fontStyle: "italic", fontSize: "0.85rem" }}>
+      <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📊</div>
+      Log more days to reveal your courage pattern
+    </div>
+  );
 
+  const W = 280, H = 100;
+  const xStep = W / (pts.length - 1 || 1);
+  const toY = v => H - (v / 10) * H;
+
+  const prePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${i * xStep},${toY(p.preLevel)}`).join(" ");
+  const postPts = pts.filter(p => p.postLevel !== null);
+  const postPath = postPts.length > 1
+    ? postPts.map((p, i) => {
+        const xi = pts.indexOf(p);
+        return `${i === 0 ? "M" : "L"}${xi * xStep},${toY(p.postLevel)}`;
+      }).join(" ")
+    : null;
+
+  const areaPath = pts.length > 1
+    ? `${prePath} L${(pts.length - 1) * xStep},${H} L0,${H} Z`
+    : null;
+
+  return (
+    <div>
+      <svg width="100%" viewBox={`-10 -10 ${W + 20} ${H + 25}`} style={{ overflow: "visible" }}>
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#c084fc" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="#c084fc" stopOpacity="0.01" />
+          </linearGradient>
+          <filter id="glow-purple">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow-green">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        {[0, 2.5, 5, 7.5, 10].map(v => (
+          <g key={v}>
+            <line x1={-10} y1={toY(v)} x2={W + 10} y2={toY(v)} stroke="rgba(124,58,237,0.08)" strokeWidth="1" />
+            <text x={-12} y={toY(v) + 4} textAnchor="end" style={{ fontSize: "0.28rem", fill: "#4b5563" }}>{v}</text>
+          </g>
+        ))}
+
+        {areaPath && <path d={areaPath} fill="url(#areaGrad)" />}
+        <path d={prePath} fill="none" stroke="#c084fc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow-purple)" />
+        {postPath && <path d={postPath} fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow-green)" />}
+
+        {pts.map((p, i) => (
+          <g key={i}>
+            <circle cx={i * xStep} cy={toY(p.preLevel)} r="5" fill="#c084fc" stroke="#030712" strokeWidth="2" />
+            {p.postLevel !== null && (
+              <circle cx={i * xStep} cy={toY(p.postLevel)} r="5" fill="#4ade80" stroke="#030712" strokeWidth="2" />
+            )}
+            <text x={i * xStep} y={H + 16} textAnchor="middle" style={{ fontSize: "0.3rem", fill: "#6b7280", letterSpacing: "0.1em" }}>
+              {p.day}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "0.75rem" }}>
+        {[{ c: "#c084fc", label: "Before action" }, { c: "#4ade80", label: "After action" }].map(l => (
+          <span key={l.label} style={{ fontSize: "0.72rem", color: "#9ca3af", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ width: 20, height: 2.5, background: l.c, display: "inline-block", borderRadius: 2, boxShadow: `0 0 6px ${l.c}88` }} /> {l.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Breathing Exercise ─────────────────────────────────────────────────────
+function BreathingExercise() {
+  const [selected, setSelected] = useState(0);
+  const [phase, setPhase] = useState("idle"); // idle | inhale | hold | exhale | holdOut
+  const [countdown, setCountdown] = useState(0);
+  const [cycles, setCycles] = useState(0);
+  const [ringSize, setRingSize] = useState(100);
+  const timerRef = useRef(null);
+  const ex = BREATHING_EXERCISES[selected];
+
+  const stop = () => {
+    clearInterval(timerRef.current);
+    setPhase("idle");
+    setCountdown(0);
+    setRingSize(100);
+  };
+
+  const start = () => {
+    setCycles(0);
+    let currentPhase = "inhale";
+    let current = ex.inhale;
+    setPhase("inhale");
+    setCountdown(ex.inhale);
+    setRingSize(150);
+
+    timerRef.current = setInterval(() => {
+      current--;
+      setCountdown(current);
+
+      if (current <= 0) {
+        if (currentPhase === "inhale") {
+          if (ex.hold && ex.hold > 0) {
+            currentPhase = "hold";
+            current = ex.hold;
+            setPhase("hold");
+            setCountdown(ex.hold);
+          } else {
+            currentPhase = "exhale";
+            current = ex.exhale;
+            setPhase("exhale");
+            setCountdown(ex.exhale);
+            setRingSize(80);
+          }
+        } else if (currentPhase === "hold") {
+          currentPhase = "exhale";
+          current = ex.exhale;
+          setPhase("exhale");
+          setCountdown(ex.exhale);
+          setRingSize(80);
+        } else if (currentPhase === "exhale") {
+          if (ex.holdOut && ex.holdOut > 0) {
+            currentPhase = "holdOut";
+            current = ex.holdOut;
+            setPhase("holdOut");
+            setCountdown(ex.holdOut);
+          } else {
+            currentPhase = "inhale";
+            current = ex.inhale;
+            setPhase("inhale");
+            setCountdown(ex.inhale);
+            setRingSize(150);
+            setCycles(c => c + 1);
+          }
+        } else if (currentPhase === "holdOut") {
+          currentPhase = "inhale";
+          current = ex.inhale;
+          setPhase("inhale");
+          setCountdown(ex.inhale);
+          setRingSize(150);
+          setCycles(c => c + 1);
+        }
+      }
+    }, 1000);
+  };
+
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
+  const phaseLabel = { idle: "Ready", inhale: "Breathe In", hold: "Hold", exhale: "Breathe Out", holdOut: "Hold" };
+  const phaseColor = { idle: "#c084fc", inhale: "#4ade80", hold: "#fbbf24", exhale: "#c084fc", holdOut: "#fbbf24" };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
+        {BREATHING_EXERCISES.map((e, i) => (
+          <button key={i} className={`tag-btn ${selected === i ? "selected" : ""}`}
+            onClick={() => { stop(); setSelected(i); }}>
+            {e.icon} {e.name}
+          </button>
+        ))}
       </div>
 
-      
-
-      {/* Footer */}
-      <footer style={{
-        borderTop: '2px solid rgba(192, 132, 252, 0.4)',
-        background: 'rgba(107, 33, 168, 0.6)',
-        backdropFilter: 'blur(12px)',
-        marginTop: '3rem',
-        borderRadius: '1.5rem 1.5rem 0 0',
-        position: 'relative',
-        zIndex: 10,
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem', textAlign: 'center' }}>
-          <p style={{ fontSize: '0.875rem', color: '#e9d5ff', margin: 0 }}>
-            Keep growing, keep connecting. Your future self will thank you.
-          </p>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: "0.5rem", fontStyle: "italic" }}>{ex.benefit}</div>
+        
+        {/* Breathing ring */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "200px", margin: "0.5rem 0" }}>
+          <div style={{
+            width: `${ringSize}px`, height: `${ringSize}px`,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${phaseColor[phase]}18 0%, transparent 70%)`,
+            border: `2px solid ${phaseColor[phase]}55`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: phase !== "idle" ? `0 0 40px ${phaseColor[phase]}33` : "none",
+            transition: "all 0.8s cubic-bezier(0.34,1.56,0.64,1)",
+            position: "relative",
+          }}>
+            <div style={{
+              width: `${ringSize * 0.65}px`, height: `${ringSize * 0.65}px`,
+              borderRadius: "50%",
+              background: `${phaseColor[phase]}18`,
+              border: `1.5px solid ${phaseColor[phase]}44`,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              transition: "all 0.8s cubic-bezier(0.34,1.56,0.64,1)",
+            }}>
+              <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: "2rem", fontWeight: 700, color: phaseColor[phase] }}>
+                {phase === "idle" ? "✦" : countdown}
+              </div>
+              <div style={{ fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: phaseColor[phase], opacity: 0.8 }}>
+                {phaseLabel[phase]}
+              </div>
+            </div>
+          </div>
         </div>
-      </footer>
+
+        {cycles > 0 && (
+          <div style={{ fontSize: "0.75rem", color: "#4ade80", marginBottom: "0.5rem" }}>
+            ✓ {cycles} {cycles === 1 ? "cycle" : "cycles"} complete
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+          {phase === "idle"
+            ? <button className="btn-primary" onClick={start}>Begin Exercise</button>
+            : <button className="btn-danger" onClick={stop}>Stop</button>
+          }
+        </div>
+      </div>
     </div>
+  );
+}
+
+// ── Story Card ─────────────────────────────────────────────────────────────
+function StoryCard({ weekData, streak }) {
+  const logged = weekData.filter(d => d.preLevel !== null).length;
+  const actions = weekData.filter(d => d.actionTaken).length;
+  const avg = logged > 0
+    ? (weekData.filter(d => d.preLevel !== null).reduce((a, b) => a + b.preLevel, 0) / logged).toFixed(1)
+    : null;
+  const vals = weekData.filter(d => d.preLevel !== null).map(d => d.preLevel);
+  const improving = vals.length >= 2 ? vals[vals.length - 1] < vals[0] : null;
+
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, rgba(124,58,237,0.3) 0%, rgba(168,85,247,0.15) 50%, rgba(236,72,153,0.15) 100%)",
+      border: "1px solid rgba(124,58,237,0.4)",
+      borderRadius: "20px",
+      padding: "2rem",
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      <div style={{ position: "absolute", top: -60, right: -60, width: 200, height: 200, borderRadius: "50%", background: "rgba(124,58,237,0.1)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: -40, left: -30, width: 140, height: 140, borderRadius: "50%", background: "rgba(236,72,153,0.08)", pointerEvents: "none" }} />
+
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#c084fc", marginBottom: "0.75rem" }}>
+          This Week's Story
+        </div>
+        <div className="display" style={{ fontSize: "1.7rem", lineHeight: 1.2, marginBottom: "1.25rem", color: "white" }}>
+          {logged === 0
+            ? "Your story begins\nwhen you log day one."
+            : improving
+            ? "You showed up,\nand you're already lighter."
+            : `${logged} days logged.\nEvery single one counts.`}
+        </div>
+        <div style={{ display: "flex", gap: "2rem", marginBottom: "1.5rem" }}>
+          {[
+            { label: "Days logged", val: `${logged}/5` },
+            { label: "Avg anxiety", val: avg ? `${avg}/10` : "—" },
+            { label: "Actions taken", val: actions },
+          ].map(s => (
+            <div key={s.label}>
+              <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: "1.4rem", fontWeight: 700, color: "#c084fc" }}>{s.val}</div>
+              <div style={{ fontSize: "0.58rem", opacity: 0.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "white" }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <button className="btn-secondary" onClick={() => {
+          const text = `This week on Connect: ${logged} days logged, avg anxiety ${avg}/10, ${actions} social actions taken.`;
+          navigator.clipboard?.writeText(text);
+        }}>
+          Share this week ↗
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Log Modal ──────────────────────────────────────────────────────────────
+function LogModal({ dayData, dayIdx, onSave, onClose }) {
+  const [phase, setPhase] = useState("pre");
+  const [preLevel, setPreLevel] = useState(dayData.preLevel ?? 5);
+  const [postLevel, setPostLevel] = useState(dayData.postLevel ?? 5);
+  const [triggers, setTriggers] = useState(dayData.triggers || []);
+  const [reflection, setReflection] = useState(dayData.reflection || "");
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceText, setVoiceText] = useState("");
+  const [hasPreLog, setHasPreLog] = useState(dayData.preLevel !== null);
+  const [hasPostLog, setHasPostLog] = useState(dayData.postLevel !== null);
+
+  const toggleTrigger = t => setTriggers(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+
+  const simulateVoice = () => {
+    if (voiceActive) { setVoiceActive(false); return; }
+    setVoiceActive(true);
+    setTimeout(() => {
+      setVoiceActive(false);
+      setVoiceText("Feeling pretty tense after the team lunch. Wasn't sure what to say.");
+      setPreLevel(7);
+      setHasPreLog(true);
+    }, 2500);
+  };
+
+  const handleSave = () => {
+    onSave(dayIdx, {
+      preLevel: hasPreLog ? Number(preLevel) : null,
+      postLevel: hasPostLog ? Number(postLevel) : null,
+      triggers,
+      reflection,
+    });
+    onClose();
+  };
+
+  const currentLevel = phase === "pre" ? preLevel : postLevel;
+  const color = getAnxietyColor(currentLevel);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(3,7,18,0.8)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+      onClick={onClose}>
+      <motion.div initial={{ y: 30, opacity: 0, scale: 0.96 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 30, opacity: 0, scale: 0.96 }}
+        transition={{ type: "spring", damping: 24, stiffness: 300 }} className="glass-card"
+        style={{ width: "100%", maxWidth: 430, padding: "1.75rem", maxHeight: "92vh", overflowY: "auto", borderColor: "rgba(124,58,237,0.3)" }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+          <div>
+            <div className="display" style={{ fontSize: "1.5rem", color: "white" }}>{dayData.day}</div>
+            <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>{dayData.date}</div>
+          </div>
+          <button onClick={onClose}
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", cursor: "pointer", color: "#9ca3af", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem" }}>
+            ✕
+          </button>
+        </div>
+
+        {/* Phase Tabs */}
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", background: "rgba(0,0,0,0.3)", borderRadius: "10px", padding: "4px" }}>
+          {[{ id: "pre", label: "Before Action" }, { id: "post", label: "After Action" }].map(p => (
+            <button key={p.id}
+              onClick={() => setPhase(p.id)}
+              style={{
+                flex: 1, padding: "0.6rem", borderRadius: "8px", border: "none", cursor: "pointer",
+                fontFamily: "'Nunito',sans-serif", fontSize: "0.72rem", letterSpacing: "0.05em",
+                background: phase === p.id ? "rgba(124,58,237,0.25)" : "transparent",
+                color: phase === p.id ? "#c084fc" : "#6b7280",
+                transition: "all 0.2s",
+              }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Voice */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <button className={`voice-btn ${voiceActive ? "recording" : ""}`} onClick={simulateVoice}>
+            {voiceActive ? "⏹" : "🎙"}
+          </button>
+          <div style={{ fontSize: "0.72rem", color: "#6b7280", letterSpacing: "0.06em" }}>
+            {voiceActive ? "Listening…" : "Tap to speak your level"}
+          </div>
+          <AnimatePresence>
+            {voiceText && (
+              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="insight-bubble" style={{ width: "100%" }}>
+                "{voiceText}"
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Slider input */}
+        <div style={{ marginBottom: "1.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              {phase === "pre" ? "Anxiety before action" : "Anxiety after action"}
+            </div>
+            <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: "1.4rem", fontWeight: 700, color, transition: "color 0.3s" }}>
+              {currentLevel}/10
+              <span style={{ fontSize: "0.7rem", fontFamily: "'Nunito',sans-serif", fontWeight: 400, color, marginLeft: "0.35rem", opacity: 0.8 }}>
+                {getAnxietyLabel(currentLevel)}
+              </span>
+            </div>
+          </div>
+          <input
+            type="range" min="0" max="10" step="1" className="slider-track"
+            value={phase === "pre" ? preLevel : postLevel}
+            onChange={e => {
+              const v = parseInt(e.target.value);
+              if (phase === "pre") { setPreLevel(v); setHasPreLog(true); }
+              else { setPostLevel(v); setHasPostLog(true); }
+            }}
+            style={{ background: `linear-gradient(to right, ${color} 0%, ${color} ${currentLevel * 10}%, rgba(124,58,237,0.2) ${currentLevel * 10}%, rgba(124,58,237,0.2) 100%)` }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem", color: "#6b7280", marginTop: "0.35rem" }}>
+            <span>😊 Calm</span><span>😐 Moderate</span><span>😰 Overwhelming</span>
+          </div>
+        </div>
+
+        {/* Triggers */}
+        <div style={{ marginBottom: "1.5rem" }}>
+          <div style={{ fontSize: "0.7rem", color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+            What triggered this?
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+            {TRIGGER_TAGS.map(tag => (
+              <button key={tag} className={`tag-btn ${triggers.includes(tag) ? "selected" : ""}`} onClick={() => toggleTrigger(tag)}>
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Reflection */}
+        <div style={{ marginBottom: "1.75rem" }}>
+          <div style={{ fontSize: "0.7rem", color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem" }}>
+            Any thoughts or reflections?
+          </div>
+          <textarea value={reflection} onChange={e => setReflection(e.target.value)}
+            placeholder="What happened? What surprised you?"
+            rows={3}
+            style={{
+              width: "100%", padding: "0.75rem 1rem",
+              background: "rgba(124,58,237,0.05)", border: "1px solid rgba(124,58,237,0.2)",
+              borderRadius: "10px", color: "white", fontFamily: "'Nunito',sans-serif", fontSize: "0.85rem",
+              outline: "none", resize: "none", lineHeight: 1.6,
+            }} />
+        </div>
+
+        <button className="btn-primary" style={{ width: "100%" }} onClick={handleSave}>
+          Save Entry ✓
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Achievement Card ───────────────────────────────────────────────────────
+function AchievementsPanel({ weekData, streak }) {
+  const logged = weekData.filter(d => d.preLevel !== null).length;
+  const actions = weekData.filter(d => d.actionTaken).length;
+  const hasDrop = weekData.some(d => d.preLevel !== null && d.postLevel !== null && d.postLevel < d.preLevel);
+
+  const isEarned = (a) => {
+    if (a.type === 'logged') return logged >= a.threshold;
+    if (a.type === 'streak') return streak >= a.threshold;
+    if (a.type === 'action') return actions >= a.threshold;
+    if (a.type === 'drop') return hasDrop;
+    return false;
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+      {ACHIEVEMENTS.map(a => {
+        const earned = isEarned(a);
+        return (
+          <motion.div key={a.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className={`achievement-badge ${earned ? "earned" : "locked"}`}>
+            <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>{a.icon}</div>
+            <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.82rem", color: earned ? "#fbbf24" : "#6b7280", marginBottom: "0.15rem" }}>
+              {a.title}
+            </div>
+            <div style={{ fontSize: "0.68rem", color: earned ? "#d1d5db" : "#4b5563", lineHeight: 1.4 }}>{a.desc}</div>
+            {earned && <div style={{ fontSize: "0.6rem", color: "#4ade80", marginTop: "0.35rem", letterSpacing: "0.08em" }}>✓ EARNED</div>}
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────
+export default function ProfileView() {
+  const [tab, setTab] = useState("log");
+  const [weekData, setWeekData] = useState(makeWeekData);
+  const [editingDay, setEditingDay] = useState(null);
+  const [streak, setStreak] = useState(3);
+  const [nudge, setNudge] = useState("Historically a tougher day for many. A 3-min breathing reset before you start? 🌬");
+  const [notification, setNotification] = useState(null);
+
+  const showNotification = (msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const saveDay = (idx, updates) => {
+    setWeekData(prev => {
+      const next = [...prev];
+      const wasEmpty = next[idx].preLevel === null;
+      next[idx] = { ...next[idx], ...updates };
+      if (wasEmpty && updates.preLevel !== null) {
+        setStreak(s => s + 1);
+        showNotification("🌟 Entry saved! Keep going!");
+      } else {
+        showNotification("✓ Updated successfully");
+      }
+      return next;
+    });
+  };
+
+  const logged = weekData.filter(d => d.preLevel !== null).length;
+  const avg = logged > 0
+    ? (weekData.filter(d => d.preLevel !== null).reduce((a, b) => a + b.preLevel, 0) / logged).toFixed(1)
+    : null;
+  const vals = weekData.filter(d => d.preLevel !== null).map(d => d.preLevel);
+  const trend = vals.length < 2 ? null
+    : vals[vals.length - 1] < vals[0] ? "improving"
+    : vals[vals.length - 1] > vals[0] ? "rising" : "stable";
+
+  const trendDisplay = { improving: { label: "↘ easing", color: "#4ade80" }, rising: { label: "↗ rising", color: "#f87171" }, stable: { label: "→ stable", color: "#fbbf24" } };
+
+  return (
+    <>
+      <FontLoader />
+      <div className="tracker-root">
+        <div className="content" style={{ maxWidth: 500, margin: "0 auto", padding: "1.5rem 1rem 5rem" }}>
+
+          {/* Header */}
+          <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
+              <div>
+                <div style={{ fontSize: "0.6rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "#7c3aed", marginBottom: "0.3rem" }}>
+                  Connect · Anxiety Tracker
+                </div>
+                <h1 className="display" style={{ fontSize: "2.1rem", lineHeight: 1.1, color: "white" }}>
+                  How are you<br /><em className="gradient-text">really</em> doing?
+                </h1>
+              </div>
+              <div style={{
+                textAlign: "center",
+                background: "linear-gradient(135deg, rgba(124,58,237,0.3), rgba(168,85,247,0.15))",
+                border: "1px solid rgba(124,58,237,0.4)",
+                borderRadius: "14px", padding: "0.75rem 1rem", minWidth: "64px",
+              }}>
+                <span className="flame" style={{ fontSize: "1.2rem" }}>🔥</span>
+                <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "1.3rem", color: "#c084fc", lineHeight: 1 }}>{streak}</div>
+                <div style={{ fontSize: "0.48rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7280" }}>streak</div>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {nudge && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ marginTop: "0.75rem" }}>
+                  <div className="insight-bubble" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <span>{nudge}</span>
+                    <button onClick={() => setNudge(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", fontSize: "0.9rem", marginLeft: "0.75rem", flexShrink: 0 }}>✕</button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+
+          {/* Stats */}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", margin: "1.25rem 0" }}>
+            {[
+              { label: "Avg level", val: avg ? `${avg}/10` : "—", color: avg ? getAnxietyColor(parseFloat(avg)) : "#6b7280" },
+              { label: "Trend", val: trend ? trendDisplay[trend].label : "—", color: trend ? trendDisplay[trend].color : "#6b7280" },
+              { label: "Logged", val: `${logged}/5`, color: "#c084fc" },
+            ].map(s => (
+              <div key={s.label} className="glass-card" style={{ textAlign: "center", padding: "0.85rem 0.5rem" }}>
+                <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.95rem", color: s.color }}>{s.val}</div>
+                <div style={{ fontSize: "0.58rem", color: "#6b7280", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: "0.15rem" }}>{s.label}</div>
+              </div>
+            ))}
+          </motion.div>
+
+          {/* Nav */}
+          <div style={{
+            display: "flex", gap: "0.25rem", marginBottom: "1.25rem",
+            overflowX: "auto", paddingBottom: "2px",
+            background: "rgba(0,0,0,0.3)", borderRadius: "12px", padding: "4px",
+          }}>
+            {[
+              { id: "log", label: "📋 Log" },
+              { id: "courage", label: "📈 Progress" },
+              { id: "breathe", label: "🌊 Breathe" },
+              { id: "insights", label: "✦ Insights" },
+              { id: "story", label: "📖 Story" },
+            ].map(t => (
+              <button key={t.id} className={`nav-tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Panels */}
+          <AnimatePresence mode="wait">
+
+            {tab === "log" && (
+              <motion.div key="log" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                    <div style={{ fontSize: "0.7rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7280" }}>This week</div>
+                    <div style={{ display: "flex", gap: "1rem" }}>
+                      {[{ c: "#c084fc", l: "Before" }, { c: "#4ade80", l: "After" }].map(x => (
+                        <span key={x.l} style={{ fontSize: "0.62rem", color: "#6b7280", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                          <span style={{ width: 8, height: 8, background: x.c, borderRadius: "2px", display: "inline-block", boxShadow: `0 0 4px ${x.c}88` }} /> {x.l}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.25rem", marginBottom: "1.25rem" }}>
+                    {weekData.map((d, i) => (
+                      <BarColumn key={i} data={d} idx={i} onClick={setEditingDay} isToday={i === 4} />
+                    ))}
+                  </div>
+
+                  <button className="btn-primary" style={{ width: "100%" }}
+                    onClick={() => { const n = weekData.findIndex(d => d.preLevel === null); setEditingDay(n === -1 ? 4 : n); }}>
+                    Log today's anxiety →
+                  </button>
+                </div>
+
+                {weekData[4].preLevel !== null && (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                    className="glass-card" style={{ padding: "1.25rem" }}>
+                    <div style={{ fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "0.75rem" }}>
+                      Today's reading
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-around" }}>
+                      <DialMeter value={weekData[4].preLevel} label="Before" size={115} />
+                      {weekData[4].postLevel !== null && <DialMeter value={weekData[4].postLevel} label="After" size={115} />}
+                    </div>
+                    {weekData[4].preLevel !== null && weekData[4].postLevel !== null && (
+                      <div style={{
+                        marginTop: "1rem", padding: "0.75rem", borderRadius: "10px",
+                        background: weekData[4].postLevel < weekData[4].preLevel
+                          ? "rgba(74,222,128,0.08)" : "rgba(248,113,113,0.08)",
+                        border: `1px solid ${weekData[4].postLevel < weekData[4].preLevel ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)"}`,
+                        textAlign: "center", fontSize: "0.8rem",
+                        color: weekData[4].postLevel < weekData[4].preLevel ? "#4ade80" : "#f87171",
+                      }}>
+                        {weekData[4].postLevel < weekData[4].preLevel
+                          ? `↘ Dropped ${weekData[4].preLevel - weekData[4].postLevel} points after action — courage at work ✓`
+                          : "You showed up anyway. That's what matters."}
+                      </div>
+                    )}
+                    {weekData[4].triggers.length > 0 && (
+                      <div style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                        {weekData[4].triggers.map(t => (
+                          <span key={t} style={{
+                            fontSize: "0.65rem", background: "rgba(124,58,237,0.1)",
+                            borderRadius: "999px", padding: "0.25rem 0.65rem",
+                            color: "#c084fc", border: "1px solid rgba(124,58,237,0.2)"
+                          }}>{t}</span>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+
+            {tab === "courage" && (
+              <motion.div key="courage" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
+                  <div className="display" style={{ fontSize: "1.15rem", marginBottom: "0.35rem", color: "white" }}>
+                    The Courage Correlation
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#9ca3af", marginBottom: "1.25rem", lineHeight: 1.6 }}>
+                    Your anxiety <em>before</em> vs <em>after</em> taking action. The gap is your courage, made visible.
+                  </div>
+                  <CourageGraph weekData={weekData} />
+                </div>
+
+                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
+                  <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "1rem" }}>
+                    Actions taken this week
+                  </div>
+                  {weekData.map((d, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0", borderBottom: i < 4 ? "1px solid rgba(124,58,237,0.08)" : "none" }}>
+                      <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.7rem", width: 32, color: "#9ca3af" }}>{d.day}</div>
+                      <div style={{ flex: 1, height: "6px", background: "rgba(124,58,237,0.1)", borderRadius: "3px", overflow: "hidden" }}>
+                        {d.actionTaken && (
+                          <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 0.7, delay: i * 0.1 }}
+                            style={{ height: "100%", background: "linear-gradient(90deg, #4ade80, #059669)", borderRadius: "3px", boxShadow: "0 0 8px rgba(74,222,128,0.4)" }} />
+                        )}
+                      </div>
+                      <div style={{ fontSize: "0.7rem", color: d.actionTaken ? "#4ade80" : d.preLevel !== null ? "#6b7280" : "#374151", width: 64, textAlign: "right" }}>
+                        {d.actionTaken ? "✓ action" : d.preLevel !== null ? "logged" : "—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="glass-card" style={{ padding: "1.5rem" }}>
+                  <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "1rem" }}>
+                    Achievements
+                  </div>
+                  <AchievementsPanel weekData={weekData} streak={streak} />
+                </div>
+              </motion.div>
+            )}
+
+            {tab === "breathe" && (
+              <motion.div key="breathe" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
+                  <div className="display" style={{ fontSize: "1.15rem", color: "white", marginBottom: "0.35rem" }}>Breathing Exercises</div>
+                  <div style={{ fontSize: "0.8rem", color: "#9ca3af", marginBottom: "1.25rem", lineHeight: 1.6 }}>
+                    Use before anxiety spikes. Your nervous system responds to breath.
+                  </div>
+                  <BreathingExercise />
+                </div>
+
+                <div className="glass-card" style={{ padding: "1.5rem" }}>
+                  <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "1rem" }}>
+                    5-4-3-2-1 Grounding
+                  </div>
+                  {[
+                    { n: 5, label: "things you can see", icon: "👁" },
+                    { n: 4, label: "things you can touch", icon: "✋" },
+                    { n: 3, label: "things you can hear", icon: "👂" },
+                    { n: 2, label: "things you can smell", icon: "👃" },
+                    { n: 1, label: "thing you can taste", icon: "👅" },
+                  ].map((step, i) => (
+                    <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }}
+                      style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.65rem 0", borderBottom: i < 4 ? "1px solid rgba(124,58,237,0.08)" : "none" }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                        background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.25)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.85rem", color: "#c084fc"
+                      }}>{step.n}</div>
+                      <span style={{ fontSize: "0.85rem", color: "#d1d5db" }}>
+                        {step.icon} {step.n} {step.label}
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {tab === "insights" && (
+              <motion.div key="insights" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                    <div className="display" style={{ fontSize: "1.15rem", color: "white" }}>What your data<br />is telling you</div>
+                    <span style={{
+                      fontSize: "0.58rem", background: "rgba(124,58,237,0.15)", color: "#c084fc",
+                      border: "1px solid rgba(124,58,237,0.3)", borderRadius: "6px",
+                      padding: "0.2rem 0.5rem", letterSpacing: "0.1em", textTransform: "uppercase"
+                    }}>AI</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {MOCK_AI_INSIGHTS.map((insight, i) => (
+                      <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="insight-bubble">
+                        {insight}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-card" style={{ padding: "1.5rem" }}>
+                  <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "1rem" }}>
+                    Top triggers this week
+                  </div>
+                  {(() => {
+                    const counts = {};
+                    weekData.forEach(d => d.triggers.forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
+                    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                    if (sorted.length === 0) return (
+                      <div style={{ color: "#6b7280", fontSize: "0.82rem", fontStyle: "italic", textAlign: "center", padding: "1rem" }}>
+                        Log entries with triggers to see your patterns emerge
+                      </div>
+                    );
+                    return sorted.map(([tag, count], i) => (
+                      <div key={tag} style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.6rem" }}>
+                        <div style={{ flex: 1, fontSize: "0.82rem", color: "#d1d5db" }}>{tag}</div>
+                        <div style={{ width: `${(count / sorted[0][1]) * 80}px`, height: 6, background: "linear-gradient(90deg, #7c3aed, #a855f7)", borderRadius: "3px", transition: "width 0.5s", boxShadow: "0 0 6px rgba(124,58,237,0.4)" }} />
+                        <div style={{ fontSize: "0.7rem", color: "#6b7280", width: 20, textAlign: "right" }}>{count}×</div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </motion.div>
+            )}
+
+            {tab === "story" && (
+              <motion.div key="story" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                <StoryCard weekData={weekData} streak={streak} />
+
+                <div className="glass-card" style={{ marginTop: "0.75rem", padding: "1.5rem" }}>
+                  <div className="display" style={{ fontSize: "1.05rem", color: "white", marginBottom: "0.75rem" }}>Remember this</div>
+                  <div className="insight-bubble" style={{ borderColor: "#c084fc" }}>
+                    Anxiety before a social situation isn't a sign something is wrong with you. It's your body preparing to grow. Every time you feel it and act anyway, the gap between fear and action gets smaller.
+                  </div>
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.68rem", color: "#6b7280" }}>— Connect · Your weekly reflection</div>
+                </div>
+
+                <div className="glass-card" style={{ marginTop: "0.75rem", padding: "1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                  <span className="flame" style={{ fontSize: "2rem" }}>🔥</span>
+                  <div>
+                    <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "1.05rem", color: "white" }}>{streak}-day streak</div>
+                    <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "0.15rem" }}>
+                      You've shown up {streak} days in a row. That matters more than you know.
+                    </div>
+                  </div>
+                  <div style={{
+                    marginLeft: "auto", fontSize: "0.7rem", color: "#c084fc",
+                    border: "1px solid rgba(124,58,237,0.3)", borderRadius: "8px",
+                    padding: "0.4rem 0.75rem", background: "rgba(124,58,237,0.08)", cursor: "pointer"
+                  }}>Share</div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <AnimatePresence>
+          {editingDay !== null && (
+            <LogModal dayData={weekData[editingDay]} dayIdx={editingDay} onSave={saveDay} onClose={() => setEditingDay(null)} />
+          )}
+        </AnimatePresence>
+
+        {/* Notification */}
+        <AnimatePresence>
+          {notification && (
+            <motion.div
+              initial={{ opacity: 0, y: 60 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 60 }}
+              style={{
+                position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)",
+                background: "linear-gradient(135deg, rgba(124,58,237,0.95), rgba(168,85,247,0.95))",
+                color: "white", padding: "0.85rem 1.75rem", borderRadius: "999px",
+                boxShadow: "0 4px 24px rgba(124,58,237,0.5)", fontSize: "0.85rem",
+                fontFamily: "'Nunito',sans-serif", fontWeight: 600, zIndex: 200,
+                border: "1px solid rgba(192,162,252,0.4)",
+              }}>
+              {notification}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 }

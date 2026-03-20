@@ -66,6 +66,11 @@ const [showShareMenu, setShowShareMenu] = useState({});
 const [showMoreMenu, setShowMoreMenu] = useState({});
 const [reactionAnimations, setReactionAnimations] = useState({});
 const [activeTab, setActiveTab] = useState('all');
+
+// Reset pagination whenever the tab changes
+useEffect(() => {
+  setVisibleCount(POSTS_PER_PAGE);
+}, [activeTab]);
 const [showPartnerModal, setShowPartnerModal] = useState(false);
 const [showMentorModal, setShowMentorModal] = useState(false);
 const [userPartners, setUserPartners] = useState([]);
@@ -74,6 +79,9 @@ const [potentialMatches, setPotentialMatches] = useState([]);
 const [showFullPost, setShowFullPost] = useState({});
 
 const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+
+const POSTS_PER_PAGE = 15;
+const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
 
 // Tour state - INLINE TOUR SYSTEM
 const [tourActive, setTourActive] = useState(false);
@@ -2565,24 +2573,44 @@ return ( <div id="community-top-bar" data-tour="community-header"  className="mi
       )}
     </>
   ) : (
-    // Show regular posts (filtered by tab)
-    posts
-      .filter(post => {
+    // Show regular posts (filtered by tab, paginated)
+    (() => {
+      const filtered = posts.filter(post => {
         if (activeTab === 'all') return true;
         if (activeTab === 'support') return post.type === 'struggle-solution';
         if (activeTab === 'solutions') return post.type === 'what-worked';
         if (activeTab === 'journeys') return post.type === 'journey-tracker';
         if (activeTab === 'challenges') return post.type === 'micro-challenge';
         return true;
-      })
-      .map((post , index) => (
-        <div key={post.id}>
-          {post.type === 'struggle-solution' && <StruggleSolutionCard post={post} postIndex={index} />}
-          {post.type === 'journey-tracker' && <JourneyTrackerCard post={post} />}
-          {post.type === 'what-worked' && <WhatWorkedCard post={post} />}
-          {post.type === 'micro-challenge' && <MicroChallengeCard post={post} />}
-        </div>
-      ))
+      });
+      const visible = filtered.slice(0, visibleCount);
+      const hasMore = filtered.length > visibleCount;
+
+      return (
+        <>
+          {visible.map((post, index) => (
+            <div key={post.id}>
+              {post.type === 'struggle-solution' && <StruggleSolutionCard post={post} postIndex={index} />}
+              {post.type === 'journey-tracker' && <JourneyTrackerCard post={post} />}
+              {post.type === 'what-worked' && <WhatWorkedCard post={post} />}
+              {post.type === 'micro-challenge' && <MicroChallengeCard post={post} />}
+            </div>
+          ))}
+
+          {hasMore && (
+            <button
+              onClick={() => setVisibleCount(prev => prev + POSTS_PER_PAGE)}
+              className="w-full py-4 mt-2 rounded-2xl border-2 border-dashed border-purple-500/40
+                hover:border-purple-400 hover:bg-purple-500/10 text-purple-400 hover:text-purple-300
+                font-bold text-sm md:text-base transition-all flex items-center justify-center gap-2"
+            >
+              <ArrowDown className="w-5 h-5" />
+              Load more posts ({filtered.length - visibleCount} remaining)
+            </button>
+          )}
+        </>
+      );
+    })()
   )}
 </div>
 

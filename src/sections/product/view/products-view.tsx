@@ -1641,7 +1641,7 @@ const loadChallengeTemplates = async () => {
       <div className="min-h-screen bg-gradient-to-br from-purple-950 via-purple-900 to-indigo-950 text-white relative overflow-x-hidden">
         {!isMobile && <ParticleBackground />}
         
-       <div className="relative  pb-32 md:pb-12">
+       <div className="relative pt-16 pb-32 md:pb-12">
 
   {/* ================= HEADER ================= */}
  

@@ -8,13 +8,14 @@ import { auth, db } from './firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import BottomNav from './MobileNav';
 import mixpanel from 'mixpanel-browser';
+import { AppBar, Toolbar } from '@mui/material';
 import './styles/onboarding.css';
-import MentorLayer from 'src/mentor/MentorLayer';
-import { useMentorStore } from 'src/store/useMentorStore';
 
 type AppProps = {
   children: React.ReactNode;
 };
+
+const TOP_BAR_HEIGHT = 56;
 
 function useScrollToTop() {
   const pathname = usePathname();
@@ -33,7 +34,8 @@ export default function App({ children }: AppProps) {
   const [authInitialized, setAuthInitialized] = useState(false);
   const [userData, setUserData] = useState<any>(null);
 
-  const { active } = useMentorStore();
+
+  const TOP_BAR_HEIGHT = 56;
 
   // Mixpanel init
   useEffect(() => {
@@ -95,13 +97,19 @@ export default function App({ children }: AppProps) {
       } else {
         localStorage.clear();
         setUserData(null);
+
+        const publicPaths = ['/sign-in', '/onboarding'];
+        const isPublic = publicPaths.some(p => pathname.startsWith(p));
+        if (!isPublic) {
+          navigate('/sign-in');
+        }
       }
 
       setAuthInitialized(true);
     };
 
     init();
-  }, [user, loading]);
+  }, [user, loading, pathname]);
 
   // Loading screen
   if (loading || !authInitialized) {
@@ -136,56 +144,56 @@ export default function App({ children }: AppProps) {
   }
 
   return (
-    <ThemeProvider>
-      <CssBaseline />
+  <ThemeProvider>
+    <CssBaseline />
 
+    <div
+      style={{
+        height: '100vh',
+        width: '100vw',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'linear-gradient(135deg, #240046, #330066)',
+        position: 'relative',
+      }}
+    >
+
+
+      {/* Scrollable content */}
       <div
         style={{
-          height: '100vh',
-          width: '100vw',
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'linear-gradient(135deg, #240046, #330066)',
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
           position: 'relative',
+          marginTop: `${TOP_BAR_HEIGHT}px`,
         }}
       >
-        {/* Mentor Layer */}
-        <MentorLayer />
-
-        {/* Scrollable content */}
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            position: 'relative',
-          }}
-        >
-          {children}
-        </div>
-
-        {/* Bottom Nav */}
-        <BottomNav />
+        {children}
       </div>
 
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
+      {/* Bottom Nav */}
+      <BottomNav />
+    </div>
 
-          /* Set smaller root font size globally */
-          html {
-            font-size: 14px; /* Default 16px -> everything shrinks */
-          }
+    <style>
+      {`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
 
-          body {
-            font-size: 1rem;
-            line-height: 1.5;
-          }
-        `}
-      </style>
-    </ThemeProvider>
-  );
+        html {
+          font-size: 13px;
+        }
+
+        body {
+          font-size: 1rem;
+          line-height: 1.5;
+        }
+      `}
+    </style>
+  </ThemeProvider>
+);
+
 }

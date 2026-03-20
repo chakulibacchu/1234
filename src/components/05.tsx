@@ -145,12 +145,12 @@ const loadLessonData = async (userId) => {
       };
     }
 
-    // Get task_overview from the 'social_skills' document
-    const socialSkillsDocRef = doc(db, 'users', userId, 'datedcourses', 'social_skills');
+    // Get task_overview from the 'life_skills' document
+    const socialSkillsDocRef = doc(db, 'users', userId, 'datedcourses', 'life_skills');
     const socialSkillsDoc = await getDoc(socialSkillsDocRef);
     
     if (!socialSkillsDoc.exists()) {
-      console.log("No social_skills course found");
+      console.log("No life_skills course found");
       setdisplayLesson(null);
       setUserStats(stats);
       setNoCourse(true);

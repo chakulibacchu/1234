@@ -29,6 +29,7 @@
   "packageManager": "yarn@1.22.22",
   "dependencies": {
     "@amcharts/amcharts5": "^5.13.6",
+    "@capacitor-firebase/authentication": "^8.1.0",
     "@capacitor/android": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",

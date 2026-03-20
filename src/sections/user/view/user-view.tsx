@@ -39,6 +39,10 @@ import SmallTalkNavigator12 from './smalltalk';
 import animationData from 'src/PHOTOS/animation.json';
 import onboarding1 from "./onboarding1";
 import { useMentorStore } from 'src/store/useMentorStore';
+import Module06 from "./module06";
+import Module07 from "./module07";
+import Module08 from "./module08";
+import Module09 from "./module09";
 import {
   mentorScriptBeforeLesson,
 } from 'src/mentor/mentorScript.js';
@@ -255,7 +259,7 @@ const topicModules = [
       {
         id: 'small_talk',
         title: 'Small Talk Fundamentals',
-        isTopicModule: true, // ADD THIS FLAG
+        isTopicModule: true,
         summary: 'Learn to start and maintain casual conversations effortlessly',
         duration: '25 min',
         xp: 150,
@@ -314,6 +318,86 @@ const topicModules = [
         title: 'Empathy & Understanding',
         summary: 'Connect deeply by understanding others\' emotions',
         duration: '30 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'fear_management',
+    title: 'Managing the Fear Response',
+    description: 'Understand and regulate your anxiety response',
+    icon: '❤️',
+    color: 'from-rose-600 to-pink-600',
+    borderColor: 'border-rose-500/40',
+    lessons: [
+      {
+        id: 'fear_response',
+        title: 'Managing the Fear Response',
+        isTopicModule: true,
+        summary: 'Regulate anxiety at a biological level before it takes over',
+        duration: '30 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'blank_mind',
+    title: 'When Your Mind Goes Blank',
+    description: 'Recover composure when you freeze mid-conversation',
+    icon: '👻',
+    color: 'from-violet-600 to-purple-600',
+    borderColor: 'border-violet-500/40',
+    lessons: [
+      {
+        id: 'mind_blank',
+        title: 'When Your Mind Goes Blank',
+        isTopicModule: true,
+        summary: 'Tools to recover naturally in 5 seconds',
+        duration: '25 min',
+        xp: 175,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'overthinking_loop',
+    title: 'Overcoming Overthinking',
+    description: 'Break the post-conversation replay loop',
+    icon: '🔁',
+    color: 'from-cyan-600 to-teal-600',
+    borderColor: 'border-cyan-500/40',
+    lessons: [
+      {
+        id: 'overthinking',
+        title: 'Overcoming Overthinking',
+        isTopicModule: true,
+        summary: 'Interrupt the loop before it consumes your night',
+        duration: '35 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'boundaries',
+    title: 'Setting Emotional Boundaries',
+    description: 'Protect your energy without damaging relationships',
+    icon: '🛡️',
+    color: 'from-amber-600 to-orange-600',
+    borderColor: 'border-amber-500/40',
+    lessons: [
+      {
+        id: 'emotional_boundaries',
+        title: 'Setting Emotional Boundaries',
+        isTopicModule: true,
+        summary: 'The language and tools to protect yourself sustainably',
+        duration: '35 min',
         xp: 200,
         completed: false,
         locked: false
@@ -398,7 +482,7 @@ useEffect(() => {
     import('driver.js').then(({ driver }) => {
       const driverInstance = driver({
         animate: true,
-        opacity: 0.75,
+        opacity: 0.3,
         padding: 20,
         allowClose: false,
         showButtons: [],
@@ -1295,7 +1379,7 @@ const overallProgress = ((currentSubpage + 1) / subpageTypes.length) * 100;
 
 return (
 <motion.div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900/20 to-slate-900 text-slate-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-<header className="relative z-20 bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50">
+<header className="bg-transparent border-b border-slate-700/30 pt-16">
 <div className="w-full px-6 lg:px-12 py-6">
 <div className="flex items-center justify-between mb-6">
 <button onClick={handlePreviousSubpage} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
@@ -1441,24 +1525,24 @@ function TopicModulesSection({ modules, onSelectLesson }) {
   const [expandedModule, setExpandedModule] = useState(null);
 
   return (
-    <div className="mt-16">
-      {/* Header */}
+    <div className="mb-16">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
+        className="mb-10"
       >
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <Layers className="w-10 h-10 text-purple-400" />
-          <h2 className="text-4xl font-bold text-white">Topic Modules</h2>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-purple-500/20 rounded-xl">
+            <Layers className="w-6 h-6 text-purple-400" />
+          </div>
+          <h2 className="text-3xl font-bold text-white">Topic Modules</h2>
         </div>
-        <p className="text-slate-400 text-lg">
+        <p className="text-slate-400 text-base ml-1">
           Deep-dive into specific skills at your own pace
         </p>
       </motion.div>
 
-      {/* Grid wrapper → LOW z-index */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-[1]">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 relative z-[1]">
         {modules.map((module, index) => (
           <TopicModuleCard
             key={module.id}
@@ -1467,9 +1551,7 @@ function TopicModulesSection({ modules, onSelectLesson }) {
             index={index}
             isExpanded={expandedModule === module.id}
             onToggle={() =>
-              setExpandedModule(
-                expandedModule === module.id ? null : module.id
-              )
+              setExpandedModule(expandedModule === module.id ? null : module.id)
             }
             onSelectLesson={onSelectLesson}
           />
@@ -1479,63 +1561,158 @@ function TopicModulesSection({ modules, onSelectLesson }) {
   );
 }
 
+function TopicModuleCard({ id, module, index, isExpanded, onToggle, onSelectLesson }) {
+  const totalXP = module.lessons.reduce((sum, l) => sum + (l.xp || 0), 0);
+  const completedCount = module.lessons.filter(l => l.completed).length;
+  const progress = module.lessons.length > 0 ? (completedCount / module.lessons.length) * 100 : 0;
 
-
-// Topic Module Card Component
-function TopicModuleCard({
-  id,
-  module,
-  index,
-  isExpanded,
-  onToggle,
-  onSelectLesson
-})
-
-
-{
   return (
     <motion.div
       id={id}
-      initial={{ opacity: 0, y: 50 }}
+      initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
-      className={`relative ${
-        id === "yuyuy" ? "z-[100000]" : "z-[1]"
-      }`}
+      transition={{ delay: index * 0.08 }}
+      className="relative z-[1] group"
     >
-      {/* Card container */}
-      <div className="bg-slate-900 rounded-2xl p-6 shadow-lg border border-slate-800">
-        <div
-          className="cursor-pointer"
-          onClick={onToggle}
-        >
-          <h3 className="text-xl font-bold text-white mb-2">
-            {module.title}
-          </h3>
-          <p className="text-slate-400 text-sm">
-            {module.description}
-          </p>
+      <div
+        className={`relative overflow-hidden rounded-2xl border transition-all duration-300 cursor-pointer
+          ${isExpanded
+            ? 'bg-slate-800/80 border-slate-600/60 shadow-2xl shadow-black/40'
+            : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600/70 hover:bg-slate-800/60 hover:shadow-xl hover:shadow-black/30'
+          }`}
+        onClick={onToggle}
+      >
+        {/* Gradient top bar */}
+        <div className={`h-1 w-full bg-gradient-to-r ${module.color}`} />
+
+        {/* Ambient glow behind card */}
+        <div className={`absolute -top-10 -right-10 w-40 h-40 bg-gradient-to-br ${module.color} opacity-[0.06] rounded-full blur-2xl pointer-events-none`} />
+
+        <div className="p-6">
+          {/* Icon + Title row */}
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${module.color} bg-opacity-20 flex items-center justify-center text-2xl shadow-lg shrink-0`}>
+                {module.icon}
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-base leading-snug">{module.title}</h3>
+                <p className="text-slate-400 text-xs mt-0.5 leading-snug">{module.description}</p>
+              </div>
+            </div>
+            <motion.div
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+              className="shrink-0 mt-1"
+            >
+              <ChevronRight className={`w-5 h-5 transition-colors ${isExpanded ? 'text-white' : 'text-slate-500'} rotate-90`} />
+            </motion.div>
+          </div>
+
+          {/* Stats row */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-1.5 bg-slate-900/60 rounded-lg px-2.5 py-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs text-slate-400 font-medium">{module.lessons.length} lesson{module.lessons.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-slate-900/60 rounded-lg px-2.5 py-1.5">
+              <Zap className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-xs text-yellow-400 font-medium">+{totalXP} XP</span>
+            </div>
+            {completedCount > 0 && (
+              <div className="flex items-center gap-1.5 bg-green-500/10 rounded-lg px-2.5 py-1.5">
+                <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                <span className="text-xs text-green-400 font-medium">{completedCount}/{module.lessons.length}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1 bg-slate-700/60 rounded-full overflow-hidden">
+            <motion.div
+              className={`h-full bg-gradient-to-r ${module.color} rounded-full`}
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
+          </div>
+          {progress === 0 && (
+            <p className="text-xs text-slate-600 mt-1.5">Not started</p>
+          )}
         </div>
 
-        {isExpanded && (
-  <div className="mt-4 space-y-2">
-    {module.lessons.map((lesson, idx) => (
-      <button
-        key={lesson.id}
-        id={idx === 0 ? "first-topic-lesson" : undefined}  // ✅ ADD THIS
-        onClick={() => onSelectLesson(lesson)}
-        className="block w-full text-left px-4 py-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition"
-      >
-        {lesson.title}
-      </button>
-    ))}
-  </div>
-)}
+        {/* Expanded lessons */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className="px-6 pb-6 space-y-2 border-t border-slate-700/50 pt-4">
+                {module.lessons.map((lesson, idx) => {
+                  const isLocked = lesson.locked;
+                  const isCompleted = lesson.completed;
 
+                  return (
+                    <motion.button
+                      key={lesson.id}
+                      id={idx === 0 ? "first-topic-lesson" : undefined}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isLocked) onSelectLesson(lesson, index);
+                      }}
+                      disabled={isLocked}
+                      className={`w-full text-left rounded-xl p-3 border transition-all group/lesson
+                        ${isCompleted
+                          ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/15'
+                          : isLocked
+                          ? 'bg-slate-900/30 border-slate-700/30 opacity-50 cursor-not-allowed'
+                          : 'bg-slate-900/60 border-slate-700/40 hover:border-slate-500/60 hover:bg-slate-900/80 cursor-pointer'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
+                            ${isCompleted ? 'bg-green-500/20' : isLocked ? 'bg-slate-700/50' : `bg-gradient-to-br ${module.color} bg-opacity-30`}`}>
+                            {isCompleted
+                              ? <CheckCircle className="w-4 h-4 text-green-400" />
+                              : isLocked
+                              ? <Lock className="w-4 h-4 text-slate-500" />
+                              : <Play className="w-4 h-4 text-white" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-semibold truncate ${isCompleted ? 'text-green-300' : isLocked ? 'text-slate-500' : 'text-white'}`}>
+                              {lesson.title}
+                            </p>
+                            <p className="text-xs text-slate-500 line-clamp-2 leading-snug mt-0.5">{lesson.summary}</p>
+                          </div>
+                        </div>
+<div className="flex flex-col items-end gap-1 shrink-0">
+                          <div className={`text-xs font-bold px-2 py-0.5 rounded-md
+                            ${isCompleted ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                            +{lesson.xp}
+                          </div>
+                          <span className="text-xs text-slate-500">{lesson.duration}</span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
 }
+
 
 
 // Topic Lesson Card Component
@@ -1545,55 +1722,15 @@ function TopicLessonCard({ lesson, moduleColor, onSelect }) {
   const { active, stepIndex, script } = useMentorStore();
   const topicModules = [
   {
-    id: 'starting_interactions',
-    title: 'How to Start Interactions',
-    description: 'Break the ice and approach anyone confidently',
-    icon: '👋',
-    color: 'from-green-600 to-emerald-600',
-    borderColor: 'border-green-500/40',
-    lessons: [
-      {
-        id: 'opening_lines',
-        title: 'Powerful Opening Lines',
-        isTopicModule: true,
-        summary: 'Learn proven openers that work in any situation',
-        duration: '20 min',
-        xp: 150,
-        completed: false,
-        locked: false
-      },
-      {
-        id: 'approach_anxiety',
-        title: 'Overcoming Approach Anxiety',
-        isTopicModule: true,
-        summary: 'Conquer fear and approach with confidence',
-        duration: '25 min',
-        xp: 175,
-        completed: false,
-        locked: true
-      },
-      {
-        id: 'reading_situations',
-        title: 'Reading Social Situations',
-        isTopicModule: true,
-        summary: 'Know when and how to approach people',
-        duration: '22 min',
-        xp: 160,
-        completed: false,
-        locked: true
-      }
-    ]
-  },
-  {
-    id: 'small_talk_mastery',
-    title: 'Small Talk',
-    description: 'Master casual conversations that lead somewhere',
+    id: 'conversation_mastery',
+    title: 'Conversation Mastery',
+    description: 'Master the art of engaging conversations',
     icon: '💬',
     color: 'from-blue-600 to-cyan-600',
     borderColor: 'border-blue-500/40',
     lessons: [
       {
-        id: 'small_talk_fundamentals',
+        id: 'small_talk',
         title: 'Small Talk Fundamentals',
         isTopicModule: true,
         summary: 'Learn to start and maintain casual conversations effortlessly',
@@ -1603,144 +1740,140 @@ function TopicLessonCard({ lesson, moduleColor, onSelect }) {
         locked: false
       },
       {
-        id: 'transition_deeper',
-        title: 'Transitioning to Deeper Topics',
-        isTopicModule: true,
-        summary: 'Move beyond surface-level into meaningful dialogue',
-        duration: '28 min',
-        xp: 180,
-        completed: false,
-        locked: true
-      },
-      {
-        id: 'keeping_flow',
-        title: 'Keeping Conversations Flowing',
-        isTopicModule: true,
-        summary: 'Never run out of things to say',
-        duration: '24 min',
-        xp: 165,
-        completed: false,
-        locked: true
-      }
-    ]
-  },
-  {
-    id: 'conversation_tactics',
-    title: 'What to Do in a Conversation',
-    description: 'Navigate any conversation with ease',
-    icon: '🎯',
-    color: 'from-purple-600 to-pink-600',
-    borderColor: 'border-purple-500/40',
-    lessons: [
-      {
-        id: 'active_listening',
-        title: 'Active Listening Mastery',
-        isTopicModule: true,
-        summary: 'Make others feel heard and valued',
-        duration: '26 min',
-        xp: 170,
-        completed: false,
-        locked: false
-      },
-      {
-        id: 'storytelling',
-        title: 'Captivating Storytelling',
-        isTopicModule: true,
-        summary: 'Tell stories that keep people engaged',
+        id: 'deep_conversations',
+        title: 'Deep Conversations',
+        summary: 'Move beyond surface-level and create meaningful connections',
         duration: '30 min',
         xp: 200,
         completed: false,
         locked: true
-      },
-      {
-        id: 'handling_awkward',
-        title: 'Handling Awkward Moments',
-        isTopicModule: true,
-        summary: 'Recover gracefully from any social mishap',
-        duration: '22 min',
-        xp: 160,
-        completed: false,
-        locked: true
       }
     ]
   },
   {
-    id: 'tips_and_tricks',
-    title: 'Tips & Tricks',
-    description: 'Advanced techniques for social mastery',
-    icon: '✨',
+    id: 'confidence_building',
+    title: 'Confidence Building',
+    description: 'Build unshakeable self-confidence',
+    icon: '🦁',
     color: 'from-orange-600 to-red-600',
     borderColor: 'border-orange-500/40',
     lessons: [
       {
-        id: 'humor_charm',
-        title: 'Using Humor & Charm',
-        isTopicModule: true,
-        summary: 'Make people laugh and feel good around you',
-        duration: '28 min',
-        xp: 185,
+        id: 'body_language',
+        title: 'Body Language Power',
+        summary: 'Command respect through powerful body language',
+        duration: '20 min',
+        xp: 150,
         completed: false,
         locked: false
       },
       {
-        id: 'body_language_secrets',
-        title: 'Body Language Secrets',
-        isTopicModule: true,
-        summary: 'Non-verbal communication that attracts people',
-        duration: '24 min',
-        xp: 165,
-        completed: false,
-        locked: true
-      },
-      {
-        id: 'memorable_exits',
-        title: 'Making Memorable Exits',
-        isTopicModule: true,
-        summary: 'Leave conversations on a high note',
-        duration: '18 min',
-        xp: 140,
+        id: 'voice_control',
+        title: 'Voice & Tone Mastery',
+        summary: 'Speak with authority and magnetism',
+        duration: '25 min',
+        xp: 175,
         completed: false,
         locked: true
       }
     ]
   },
   {
-    id: 'advanced_connection',
-    title: 'The TALK Framework',
-    description: 'Turn conversations into lasting relationships',
-    icon: '🤝',
-    color: 'from-indigo-600 to-violet-600',
-    borderColor: 'border-indigo-500/40',
+    id: 'emotional_intelligence',
+    title: 'Emotional Intelligence',
+    description: 'Understand and manage emotions effectively',
+    icon: '🧠',
+    color: 'from-purple-600 to-pink-600',
+    borderColor: 'border-purple-500/40',
     lessons: [
       {
-        id: 'genuine_interest',
-        title: 'Showing Genuine Interest',
+        id: 'empathy_skills',
+        title: 'Empathy & Understanding',
+        summary: 'Connect deeply by understanding others\' emotions',
+        duration: '30 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'fear_management',
+    title: 'Managing the Fear Response',
+    description: 'Understand and regulate your anxiety response',
+    icon: '❤️',
+    color: 'from-rose-600 to-pink-600',
+    borderColor: 'border-rose-500/40',
+    lessons: [
+      {
+        id: 'fear_response',
+        title: 'Managing the Fear Response',
         isTopicModule: true,
-        summary: 'Connect authentically without being fake',
-        duration: '26 min',
+        summary: 'Regulate anxiety at a biological level before it takes over',
+        duration: '30 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'blank_mind',
+    title: 'When Your Mind Goes Blank',
+    description: 'Recover composure when you freeze mid-conversation',
+    icon: '👻',
+    color: 'from-violet-600 to-purple-600',
+    borderColor: 'border-violet-500/40',
+    lessons: [
+      {
+        id: 'mind_blank',
+        title: 'When Your Mind Goes Blank',
+        isTopicModule: true,
+        summary: 'Tools to recover naturally in 5 seconds',
+        duration: '25 min',
         xp: 175,
         completed: false,
         locked: false
-      },
+      }
+    ]
+  },
+  {
+    id: 'overthinking_loop',
+    title: 'Overcoming Overthinking',
+    description: 'Break the post-conversation replay loop',
+    icon: '🔁',
+    color: 'from-cyan-600 to-teal-600',
+    borderColor: 'border-cyan-500/40',
+    lessons: [
       {
-        id: 'following_up',
-        title: 'Following Up Effectively',
+        id: 'overthinking',
+        title: 'Overcoming Overthinking',
         isTopicModule: true,
-        summary: 'Turn one-time meetings into friendships',
-        duration: '23 min',
-        xp: 160,
+        summary: 'Interrupt the loop before it consumes your night',
+        duration: '35 min',
+        xp: 200,
         completed: false,
-        locked: true
-      },
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'boundaries',
+    title: 'Setting Emotional Boundaries',
+    description: 'Protect your energy without damaging relationships',
+    icon: '🛡️',
+    color: 'from-amber-600 to-orange-600',
+    borderColor: 'border-amber-500/40',
+    lessons: [
       {
-        id: 'maintaining_connections',
-        title: 'Maintaining Connections',
+        id: 'emotional_boundaries',
+        title: 'Setting Emotional Boundaries',
         isTopicModule: true,
-        summary: 'Keep relationships alive long-term',
-        duration: '27 min',
-        xp: 180,
+        summary: 'The language and tools to protect yourself sustainably',
+        duration: '35 min',
+        xp: 200,
         completed: false,
-        locked: true
+        locked: false
       }
     ]
   }
@@ -1762,7 +1895,7 @@ function TopicLessonCard({ lesson, moduleColor, onSelect }) {
       import('driver.js').then(({ driver }) => {
         const driverInstance = driver({
           animate: true,
-          opacity: 0.75,
+          opacity: 0.3,
           padding: 20,
           allowClose: false,
           showButtons: [],
@@ -1937,14 +2070,7 @@ function TimelineView({ Id  , user, lessons, userStats, handleSelectLesson, hand
     );
   }
 
-  if (!day1Complete && !firstLessonCompleted && lessons.length > 0) {
-  return (
-    <FirstLessonPrompt
-      user={user}
-      onStartLesson={() => handleSelectLesson(lessons[0], 0)}
-    />
-  );
-}
+  
 
 // Calculate which day the user is on based on completed lessons
 const completedDays = lessons.filter(l => l.completed).length;
@@ -1952,202 +2078,158 @@ const currentUnlockedDay = Math.min(completedDays + 1, 5);
 
 const topicModules = [
   {
-    id: 'starting_interactions',
-    title: 'How to Start Interactions',
-    description: 'Break the ice and approach anyone confidently',
-    icon: '👋',
-    color: 'from-green-600 to-emerald-600',
-    borderColor: 'border-green-500/40',
-    lessons: [
-      {
-        id: 'opening_lines',
-        title: 'Powerful Opening Lines',
-        isTopicModule: true,
-        summary: 'Learn proven openers that work in any situation',
-        duration: '20 min',
-        xp: 150,
-        completed: false,
-        locked: currentUnlockedDay < 1
-      },
-      {
-        id: 'approach_anxiety',
-        title: 'Overcoming Approach Anxiety',
-        isTopicModule: true,
-        summary: 'Conquer fear and approach with confidence',
-        duration: '25 min',
-        xp: 175,
-        completed: false,
-        locked: true
-      },
-      {
-        id: 'reading_situations',
-        title: 'Reading Social Situations',
-        isTopicModule: true,
-        summary: 'Know when and how to approach people',
-        duration: '22 min',
-        xp: 160,
-        completed: false,
-        locked: true
-      }
-    ]
-  },
-  {
-    id: 'small_talk_mastery',
-    title: 'Small Talk',
-    description: 'Master casual conversations that lead somewhere',
+    id: 'conversation_mastery',
+    title: 'Conversation Mastery',
+    description: 'Master the art of engaging conversations',
     icon: '💬',
     color: 'from-blue-600 to-cyan-600',
     borderColor: 'border-blue-500/40',
     lessons: [
       {
-        id: 'small_talk_fundamentals',
+        id: 'small_talk',
         title: 'Small Talk Fundamentals',
         isTopicModule: true,
         summary: 'Learn to start and maintain casual conversations effortlessly',
         duration: '25 min',
         xp: 150,
         completed: false,
-        locked: currentUnlockedDay < 2
+        locked: false
       },
       {
-        id: 'transition_deeper',
-        title: 'Transitioning to Deeper Topics',
-        isTopicModule: true,
-        summary: 'Move beyond surface-level into meaningful dialogue',
-        duration: '28 min',
-        xp: 180,
-        completed: false,
-        locked: true
-      },
-      {
-        id: 'keeping_flow',
-        title: 'Keeping Conversations Flowing',
-        isTopicModule: true,
-        summary: 'Never run out of things to say',
-        duration: '24 min',
-        xp: 165,
-        completed: false,
-        locked: true
-      }
-    ]
-  },
-  {
-    id: 'conversation_tactics',
-    title: 'What to Do in a Conversation',
-    description: 'Navigate any conversation with ease',
-    icon: '🎯',
-    color: 'from-purple-600 to-pink-600',
-    borderColor: 'border-purple-500/40',
-    lessons: [
-      {
-        id: 'active_listening',
-        title: 'Active Listening Mastery',
-        isTopicModule: true,
-        summary: 'Make others feel heard and valued',
-        duration: '26 min',
-        xp: 170,
-        completed: false,
-        locked: currentUnlockedDay < 3
-      },
-      {
-        id: 'storytelling',
-        title: 'Captivating Storytelling',
-        isTopicModule: true,
-        summary: 'Tell stories that keep people engaged',
+        id: 'deep_conversations',
+        title: 'Deep Conversations',
+        summary: 'Move beyond surface-level and create meaningful connections',
         duration: '30 min',
         xp: 200,
         completed: false,
         locked: true
-      },
-      {
-        id: 'handling_awkward',
-        title: 'Handling Awkward Moments',
-        isTopicModule: true,
-        summary: 'Recover gracefully from any social mishap',
-        duration: '22 min',
-        xp: 160,
-        completed: false,
-        locked: true
       }
     ]
   },
   {
-    id: 'tips_and_tricks',
-    title: 'Tips & Tricks',
-    description: 'Advanced techniques for social mastery',
-    icon: '✨',
+    id: 'confidence_building',
+    title: 'Confidence Building',
+    description: 'Build unshakeable self-confidence',
+    icon: '🦁',
     color: 'from-orange-600 to-red-600',
     borderColor: 'border-orange-500/40',
     lessons: [
       {
-        id: 'humor_charm',
-        title: 'Using Humor & Charm',
-        isTopicModule: true,
-        summary: 'Make people laugh and feel good around you',
-        duration: '28 min',
-        xp: 185,
+        id: 'body_language',
+        title: 'Body Language Power',
+        summary: 'Command respect through powerful body language',
+        duration: '20 min',
+        xp: 150,
         completed: false,
-        locked: currentUnlockedDay < 4
+        locked: false
       },
       {
-        id: 'body_language_secrets',
-        title: 'Body Language Secrets',
-        isTopicModule: true,
-        summary: 'Non-verbal communication that attracts people',
-        duration: '24 min',
-        xp: 165,
-        completed: false,
-        locked: true
-      },
-      {
-        id: 'memorable_exits',
-        title: 'Making Memorable Exits',
-        isTopicModule: true,
-        summary: 'Leave conversations on a high note',
-        duration: '18 min',
-        xp: 140,
+        id: 'voice_control',
+        title: 'Voice & Tone Mastery',
+        summary: 'Speak with authority and magnetism',
+        duration: '25 min',
+        xp: 175,
         completed: false,
         locked: true
       }
     ]
   },
   {
-    id: 'advanced_connection',
-    title: 'The TALK Framework',
-    description: 'Turn conversations into lasting relationships',
-    icon: '🤝',
-    color: 'from-indigo-600 to-violet-600',
-    borderColor: 'border-indigo-500/40',
+    id: 'emotional_intelligence',
+    title: 'Emotional Intelligence',
+    description: 'Understand and manage emotions effectively',
+    icon: '🧠',
+    color: 'from-purple-600 to-pink-600',
+    borderColor: 'border-purple-500/40',
     lessons: [
       {
-        id: 'genuine_interest',
-        title: 'Showing Genuine Interest',
+        id: 'empathy_skills',
+        title: 'Empathy & Understanding',
+        summary: 'Connect deeply by understanding others\' emotions',
+        duration: '30 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'fear_management',
+    title: 'Managing the Fear Response',
+    description: 'Understand and regulate your anxiety response',
+    icon: '❤️',
+    color: 'from-rose-600 to-pink-600',
+    borderColor: 'border-rose-500/40',
+    lessons: [
+      {
+        id: 'fear_response',
+        title: 'Managing the Fear Response',
         isTopicModule: true,
-        summary: 'Connect authentically without being fake',
-        duration: '26 min',
+        summary: 'Regulate anxiety at a biological level before it takes over',
+        duration: '30 min',
+        xp: 200,
+        completed: false,
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'blank_mind',
+    title: 'When Your Mind Goes Blank',
+    description: 'Recover composure when you freeze mid-conversation',
+    icon: '👻',
+    color: 'from-violet-600 to-purple-600',
+    borderColor: 'border-violet-500/40',
+    lessons: [
+      {
+        id: 'mind_blank',
+        title: 'When Your Mind Goes Blank',
+        isTopicModule: true,
+        summary: 'Tools to recover naturally in 5 seconds',
+        duration: '25 min',
         xp: 175,
         completed: false,
-        locked: currentUnlockedDay < 5
-      },
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'overthinking_loop',
+    title: 'Overcoming Overthinking',
+    description: 'Break the post-conversation replay loop',
+    icon: '🔁',
+    color: 'from-cyan-600 to-teal-600',
+    borderColor: 'border-cyan-500/40',
+    lessons: [
       {
-        id: 'following_up',
-        title: 'Following Up Effectively',
+        id: 'overthinking',
+        title: 'Overcoming Overthinking',
         isTopicModule: true,
-        summary: 'Turn one-time meetings into friendships',
-        duration: '23 min',
-        xp: 160,
+        summary: 'Interrupt the loop before it consumes your night',
+        duration: '35 min',
+        xp: 200,
         completed: false,
-        locked: true
-      },
+        locked: false
+      }
+    ]
+  },
+  {
+    id: 'boundaries',
+    title: 'Setting Emotional Boundaries',
+    description: 'Protect your energy without damaging relationships',
+    icon: '🛡️',
+    color: 'from-amber-600 to-orange-600',
+    borderColor: 'border-amber-500/40',
+    lessons: [
       {
-        id: 'maintaining_connections',
-        title: 'Maintaining Connections',
+        id: 'emotional_boundaries',
+        title: 'Setting Emotional Boundaries',
         isTopicModule: true,
-        summary: 'Keep relationships alive long-term',
-        duration: '27 min',
-        xp: 180,
+        summary: 'The language and tools to protect yourself sustainably',
+        duration: '35 min',
+        xp: 200,
         completed: false,
-        locked: true
+        locked: false
       }
     ]
   }
@@ -2165,8 +2247,8 @@ return (
 
 
     {/* HEADER */}
-    <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <header className="bg-transparent border-b border-slate-700/30 pt-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-between relative z-[100001]" >
 
           <div>
@@ -2201,6 +2283,19 @@ return (
           label="Days in a row"
           color="green"
         />
+      </div>
+
+      
+
+      <div id="topic-modules-section">
+      {/* TOPIC MODULES */}
+      <TopicModulesSection
+        onClick={() => {
+          window.dispatchEvent(new Event('LESSON_STARTED'));
+        }}
+        modules={topicModules}
+        onSelectLesson={handleSelectLesson}
+      />
       </div>
 
       {/* LESSON JOURNEY (ANCHOR CONTAINER) */}
@@ -2279,16 +2374,6 @@ return (
         </div>
         
       </div>
-      <div id="topic-modules-section">
-      {/* TOPIC MODULES */}
-      <TopicModulesSection
-        onClick={() => {
-          window.dispatchEvent(new Event('LESSON_STARTED'));
-        }}
-        modules={topicModules}
-        onSelectLesson={handleSelectLesson}
-      />
-      </div>
     </div>
   </motion.div>
 );
@@ -2332,7 +2417,7 @@ function LessonCard({ lesson, index, lessons, handleSelectLesson, displayDayNumb
       import('driver.js').then(({ driver }) => {
         const driverInstance = driver({
           animate: true,
-          opacity: 0.75,
+          opacity: 0.3,
           padding: 20,
           allowClose: false,
           showButtons: [],
@@ -2726,6 +2811,22 @@ const lessonToModuleMap = {
   'genuine_interest': TALKFrameworkNavigator,
   'following_up': TALKFrameworkNavigator,
   'maintaining_connections': TALKFrameworkNavigator,
+
+  // Managing the Fear Response (module06)
+  'fear_response': Module06,
+  'managing_anxiety': Module06,
+
+  // When Your Mind Goes Blank (module07)
+  'mind_blank': Module07,
+  'blank_recovery': Module07,
+
+  // Overcoming Overthinking (module08)
+  'overthinking': Module08,
+  'rumination': Module08,
+
+  // Setting Emotional Boundaries (module09)
+  'emotional_boundaries': Module09,
+  'setting_limits': Module09,
 };
 
 
@@ -2766,7 +2867,7 @@ useEffect(() => {
       import('driver.js').then(({ driver }) => {
         const driverInstance = driver({
           animate: true,
-          opacity: 0.75,
+          opacity: 0.3,
           padding: 20,
           allowClose: false,
           showButtons: [],

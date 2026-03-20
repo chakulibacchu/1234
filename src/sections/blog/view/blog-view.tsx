@@ -669,16 +669,41 @@ const [wasItBad, setWasItBad] = useState('');
 
 const [activeInteraction, setActiveInteraction] = useState(null);
 const [interactionTimer, setInteractionTimer] = useState(0);
+const [plannerTab, setPlannerTab] = useState('plan'); // 'ladder'|'plan'|'prep'|'history'
+const [planActionSteps, setPlanActionSteps] = useState([]);
+const [newActionStep, setNewActionStep] = useState('');
+const [expandedInteraction, setExpandedInteraction] = useState(null);
 
-const [showInteractionPlanner, setShowInteractionPlanner] = useState(false);
-const [showExposureHierarchy, setShowExposureHierarchy] = useState(false);
-const [showPrepKit, setShowPrepKit] = useState(null); // stores situation type
+
 const [exposureHierarchy, setExposureHierarchy] = useState([]);
 const [selectedInteraction, setSelectedInteraction] = useState(null);
 const [duringInteractionMode, setDuringInteractionMode] = useState(null);
 const [interactionStartTime, setInteractionStartTime] = useState(null);
 
+const [achievementsOpen, setAchievementsOpen] = useState(false);
 
+const [onboardingStep, setOnboardingStep] = useState(1); // 1=welcome, 2=goal, 3=baseline
+const [userGoal, setUserGoal] = useState(''); // 'social' | 'medical' | 'general'
+const [baselineAnxiety, setBaselineAnxiety] = useState(6);
+const [onboardingComplete, setOnboardingComplete] = useState(() => {
+  return localStorage.getItem('onboardingComplete') === 'true';
+});
+
+
+const [planStep, setPlanStep] = useState(0);
+const [planDraft, setPlanDraft] = useState({
+  type: '', typeName: '', name: '',
+  date: '', time: '', anxiety: 5,
+  why: '', actionSteps: [],
+});
+const [planNewStep, setPlanNewStep] = useState('');
+ 
+// Helper — resets the funnel back to step 1
+const resetPlanFunnel = () => {
+  setPlanStep(1);
+  setPlanDraft({ type:'', typeName:'', name:'', date:'', time:'', anxiety:5, why:'', actionSteps:[] });
+  setPlanNewStep('');
+};
 
 
 
@@ -697,9 +722,8 @@ const { isBlocked } = useTourModalControl({
     showBreathing,
     showReframing,
     showDiscovery,
-    showInteractionPlanner,
-    showExposureHierarchy,
-    showPrepKit: !!showPrepKit,
+    
+
   },
   isTourActive: active,
 });
@@ -713,9 +737,7 @@ useSkipHiddenSteps(
     showBreathing,
     showReframing,
     showDiscovery,
-    showInteractionPlanner,
-    showExposureHierarchy,
-    showPrepKit: !!showPrepKit,
+
   },
   active  // ✅ Only 4 parameters now, not 5
 );
@@ -732,20 +754,11 @@ useEffect(() => {
     showBreathing,
     showReframing,
     showDiscovery,
-    showInteractionPlanner,
-    showExposureHierarchy,
-    showPrepKit: !!showPrepKit,
+ 
   });
-}, [active, showBreathing, showReframing, showDiscovery, showInteractionPlanner, showExposureHierarchy, showPrepKit]);
+}, [active, showBreathing, showReframing, showDiscovery]);
 
 // Auto-start inline tour on first modal open
-useEffect(() => {
-  if (showInteractionPlanner && !hasSeenInteractionPlannerTour && interactionPlannerTourStep === 0) {
-    setTimeout(() => {
-      setInteractionPlannerTourStep(1);
-    }, 500);
-  }
-}, [showInteractionPlanner, hasSeenInteractionPlannerTour]);
 
 useEffect(() => {
   if (!active) return;  // ✅ Use Zustand state
@@ -761,9 +774,7 @@ useEffect(() => {
           showBreathing,
           showReframing,
           showDiscovery,
-          showInteractionPlanner,
-          showExposureHierarchy,
-          showPrepKit: !!showPrepKit,
+          
         };
         if (modalStates[step.pauseForModal]) {
           e.preventDefault();
@@ -778,7 +789,7 @@ useEffect(() => {
 
   document.addEventListener('click', handleClick, true);
   return () => document.removeEventListener('click', handleClick, true);
-}, [active, stepIndex, showBreathing, showReframing, showDiscovery, showInteractionPlanner, showExposureHierarchy, showPrepKit, setStepIndex]);  // ✅ Updated dependencies
+}, [active, stepIndex, showBreathing, showReframing, showDiscovery, setStepIndex]);  // ✅ Updated dependencies
 // ✅ NEW: Auto-dismiss onboarding when tour starts
 useEffect(() => {
   if (active) {
@@ -837,19 +848,7 @@ useEffect(() => {
 
 
 
-useEffect(() => {
-  const slider = document.getElementById('hierarchy-difficulty');
-  const display = document.getElementById('difficulty-display');
-  
-  if (slider && display) {
-    const updateDisplay = () => {
-      display.textContent = slider.value + '/10';
-    };
-    
-    slider.addEventListener('input', updateDisplay);
-    return () => slider.removeEventListener('input', updateDisplay);
-  }
-}, [showExposureHierarchy]);
+
 
 const handleGoogleSignIn = async () => {
 try {
@@ -916,9 +915,7 @@ useEffect(() => {
         if (showBreathing) setShowBreathing(false);
         if (showReframing) setShowReframing(false);
         if (showDiscovery) setShowDiscovery(false);
-        if (showInteractionPlanner) setShowInteractionPlanner(false);
-        if (showExposureHierarchy) setShowExposureHierarchy(false);
-        if (showPrepKit) setShowPrepKit(false);
+        
         
         // Wait for modal to close, then advance
         setTimeout(() => {
@@ -933,20 +930,11 @@ useEffect(() => {
 
   document.addEventListener('click', handleClick, true);
   return () => document.removeEventListener('click', handleClick, true);
-}, [active, stepIndex, showBreathing, showReframing, showDiscovery, showInteractionPlanner, showExposureHierarchy, showPrepKit]);
+}, [active, stepIndex, showBreathing, showReframing, showDiscovery]);
 // ============================================================================
 // FIREBASE OPERATIONS
 // ============================================================================
 
-const handleComplete = () => {
-  // User finished interacting with the module
-  setShowInteractionPlanner(false); // Close the modal
-  
-  // Resume the tour to next step after a short delay
-  setTimeout(() => {
-    resumeTour();
-  }, 500);
-};
 
 const saveActivityToFirebase = async (activity) => {
 if (!user) return;
@@ -995,6 +983,55 @@ const handleNextTourStep = () => {
     }));
   }
 };
+
+
+const saveUserProfile = async (profile) => {
+  if (!user) return;
+  const profileDoc = doc(db, 'users', user.uid, 'settings', 'profile');
+  await setDoc(profileDoc, { ...profile, updatedAt: Date.now() });
+};
+ 
+// This function auto-seeds the exposure hierarchy with starter steps
+// based on the user's chosen goal. Call it inside completeOnboarding below.
+const seedStarterHierarchy = async (goal) => {
+  if (!user) return;
+ 
+  const starterSteps = {
+    social: [
+      { description: 'Make eye contact and smile at a stranger', difficulty: 2 },
+      { description: 'Say hello to someone new at an event', difficulty: 4 },
+      { description: 'Attend a group class or activity alone', difficulty: 6 },
+      { description: 'Introduce yourself to someone and keep a conversation going', difficulty: 8 },
+    ],
+    medical: [
+      { description: 'Look up a doctor or clinic online without calling', difficulty: 2 },
+      { description: 'Call to book an appointment (can hang up if needed)', difficulty: 4 },
+      { description: 'Attend the appointment and answer basic questions', difficulty: 6 },
+      { description: 'Ask the doctor a question you prepared in advance', difficulty: 8 },
+    ],
+    general: [
+      { description: 'Identify one situation you\'ve been avoiding', difficulty: 2 },
+      { description: 'Go somewhere slightly outside your comfort zone for 10 min', difficulty: 4 },
+      { description: 'Stay in an uncomfortable situation until anxiety drops naturally', difficulty: 6 },
+      { description: 'Face your biggest avoided situation with a plan', difficulty: 8 },
+    ],
+  };
+ 
+  const steps = (starterSteps[goal] || starterSteps.general).map((s, i) => ({
+    id: `starter_${i}_${Date.now()}`,
+    ...s,
+    status: 'pending',
+    dateAdded: Date.now(),
+    completedDate: null,
+    attempts: 0,
+    notes: [],
+  }));
+ 
+  const hierarchyDoc = doc(db, 'users', user.uid, 'settings', 'exposureHierarchy');
+  await setDoc(hierarchyDoc, { items: steps, updatedAt: Date.now() });
+  setExposureHierarchy(steps);
+};
+
 
 const handleSkipTour = () => {
   setInteractionPlannerTourStep(0);
@@ -1204,6 +1241,28 @@ setBreathingTimer(0);
 showNotification('Great work! You should feel calmer now 🌸');
 };
 
+
+const addActionStep = () => {
+  if (!newActionStep.trim()) return;
+  setPlanActionSteps(prev => [...prev, {
+    id: Date.now().toString(),
+    text: newActionStep.trim(),
+    completed: false,
+  }]);
+  setNewActionStep('');
+};
+ 
+const toggleActionStep = (id) => {
+  setPlanActionSteps(prev =>
+    prev.map(s => s.id === id ? { ...s, completed: !s.completed } : s)
+  );
+};
+ 
+const removeActionStep = (id) => {
+  setPlanActionSteps(prev => prev.filter(s => s.id !== id));
+};
+
+
 // ============================================================================
 // LOADING STATE
 // ============================================================================
@@ -1330,7 +1389,7 @@ return (
 </div>
 </div>
 
-<div className="p-6 max-w-6xl mx-auto">
+<div className="p-6 pt-16 max-w-6xl mx-auto">
 
 {/* WELCOME SECTION */}
 <div className="mb-8">
@@ -1441,29 +1500,7 @@ Check In After Activity
 {/* QUICK ACTIONS */}
 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
 
-  {/* TOUR BUTTON */}
-<button
-  onClick={() => {
-    console.log('🎯 TOUR BUTTON CLICKED!');
-    console.log('Script:', mentorScriptBlogView);
-    startJourney(mentorScriptBlogView);
-  }}
-  style={{
-    position: 'fixed',
-    top: '20px',
-    right: '20px',
-    zIndex: 999999,
-    padding: '12px 24px',
-    background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '999px',
-    fontWeight: 'bold',
-    cursor: 'pointer'
-  }}
->
-  🎯 Take Tour
-</button>
+  
 
 <button
   onClick={() => setShowBreathing(true)}
@@ -1495,15 +1532,7 @@ Check In After Activity
   <p className="text-sm text-green-300">Find anxiety-friendly options</p>
 </button>
 
-<button
-  onClick={() => setShowInteractionPlanner(true)}
-  id="interaction-planner-button"
-  className="p-5 bg-gradient-to-br from-indigo-800/60 to-purple-900/60 hover:from-indigo-700/60 hover:to-purple-800/60 rounded-2xl border-2 border-indigo-500/30 transition-all shadow-xl hover:shadow-2xl"
->
-  <Calendar className="w-8 h-8 text-indigo-400 mb-2" />
-  <h3 className="font-bold text-white mb-1">Interaction Planner</h3>
-  <p className="text-sm text-indigo-300">Prepare for situations</p>
-</button>
+
 </div>
 
 {/* STATS GRID */}
@@ -1545,85 +1574,1109 @@ Check In After Activity
 </div>
 </div>
 
-{/* ACHIEVEMENTS */}
-<div data-tour="achievements-section" className="bg-gradient-to-br from-purple-900/50 to-indigo-900/50 backdrop-blur-md p-6 rounded-3xl border-2 border-purple-500/30 mb-8 shadow-2xl">
-<div className="flex items-center gap-3 mb-6">
-<Award className="w-6 h-6 text-yellow-400" />
-<h2 className="text-2xl font-bold text-purple-100">Achievements</h2>
-</div>
 
-<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-{achievementsData.map(achievement => (
-<div
-key={achievement.id}
-className={`p-5 rounded-2xl border-2 text-center transition-all ${
-achievement.unlocked
-? 'bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-xl'
-: 'bg-purple-950/40 border-purple-700/30 opacity-70'
-}`}
->
-<div className="text-4xl mb-2">{achievement.icon}</div>
-<p className="text-sm font-bold text-purple-100 mb-1">{achievement.title}</p>
-<p className="text-xs text-purple-300 mb-2">{achievement.progress}/{achievement.threshold}</p>
-{!achievement.unlocked && (
-<div className="h-2 bg-purple-900/50 rounded-full overflow-hidden">
-<div
-className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-style={{ width: `${Math.min((achievement.progress / achievement.threshold) * 100, 100)}%` }}
-/>
-</div>
-)}
-</div>
-))}
-</div>
-</div>
-
-{/* UPCOMING ACTIVITIES */}
-{upcomingActivities.length > 0 && (
-  <div id="upcoming-section" className="bg-gradient-to-br from-purple-900/50 to-indigo-900/50 backdrop-blur-md p-6 rounded-3xl border-2 border-purple-500/30 mb-8 shadow-2xl">
-    <div className="flex items-center gap-3 mb-6">
-      <Calendar className="w-6 h-6 text-purple-400" />
-      <h2 className="text-2xl font-bold text-purple-100">All Upcoming Activities</h2>
-      <span className="text-sm text-purple-400">({upcomingActivities.length})</span>
+<div className="mb-8" id="action-planner-section">
+ 
+  {/* Section header */}
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{
+        width: '36px', height: '36px',
+        background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+        borderRadius: '10px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 0 16px rgba(79,70,229,0.4)',
+      }}>
+        <span style={{ fontSize: '16px' }}>🪜</span>
+      </div>
+      <div>
+        <h2 style={{ color: '#f3f0ff', fontWeight: '700', fontSize: '20px', margin: 0 }}>Action Planner</h2>
+        <p style={{ color: 'rgba(196,181,253,0.6)', fontSize: '12px', margin: 0 }}>Your fear ladder + interaction plans</p>
+      </div>
     </div>
+  </div>
+ 
+  {/* Tab bar */}
+  <div style={{
+    display: 'flex', gap: '4px',
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: '14px',
+    padding: '4px',
+    marginBottom: '20px',
+    border: '1px solid rgba(255,255,255,0.07)',
+  }}>
+    {[
+      { id: 'ladder', label: 'My Plans', emoji: '📋' },
+      { id: 'plan',   label: 'Plan',    emoji: '📋' },
+      { id: 'prep',   label: 'Prep Kit',emoji: '🎒' },
+      { id: 'history',label: 'History', emoji: '📈' },
+    ].map(tab => (
+      <button
+        key={tab.id}
+        onClick={() => setPlannerTab(tab.id)}
+        style={{
+          flex: 1, padding: '9px 4px',
+          borderRadius: '10px',
+          border: 'none',
+          background: plannerTab === tab.id
+            ? 'linear-gradient(135deg, #4f46e5, #7c3aed)'
+            : 'transparent',
+          color: plannerTab === tab.id ? '#fff' : 'rgba(196,181,253,0.55)',
+          fontWeight: plannerTab === tab.id ? '700' : '500',
+          fontSize: '12px',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: '3px',
+          boxShadow: plannerTab === tab.id ? '0 2px 12px rgba(79,70,229,0.4)' : 'none',
+        }}
+      >
+        <span style={{ fontSize: '14px' }}>{tab.emoji}</span>
+        {tab.label}
+      </button>
+    ))}
+  </div>
+ 
+  {/* ── TAB: LADDER ─────────────────────────────────────────────────── */}
+  {plannerTab === 'ladder' && (
+  <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
 
-    <div className="space-y-3">
-      {upcomingActivities.map((activity) => (
-        <div key={activity.id} className="p-4 bg-purple-950/30 rounded-2xl border border-purple-700/30 hover:border-purple-600/50 transition-all">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h3 className="font-bold text-white mb-1">{activity.name}</h3>
-              <div className="flex items-center gap-2 text-sm text-purple-400 mb-2">
-                <span className="text-2xl">{ACTIVITY_CATEGORIES.find(c => c.name === activity.type)?.icon || '🎯'}</span>
-                <span>{activity.type}</span>
+    {upcomingActivities.length === 0 ? (
+      <div style={{
+        textAlign: 'center', padding: '40px 20px',
+        background: 'rgba(255,255,255,0.02)',
+        borderRadius: '16px',
+        border: '1px dashed rgba(255,255,255,0.08)',
+      }}>
+        <div style={{ fontSize: '40px', marginBottom: '12px', opacity: 0.4 }}>📋</div>
+        <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '14px', marginBottom: '12px' }}>
+          No plans yet — build your first one
+        </p>
+        <button
+          onClick={() => setPlannerTab('plan')}
+          style={{
+            padding: '10px 20px',
+            background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
+            border: 'none', borderRadius: '10px',
+            color: '#fff', fontWeight: '700', fontSize: '13px',
+            cursor: 'pointer',
+          }}
+        >
+          Build a plan →
+        </button>
+      </div>
+    ) : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {upcomingActivities
+          .sort((a, b) => a.scheduledDate - b.scheduledDate)
+          .map(activity => (
+          <div key={activity.id} style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '14px', overflow: 'hidden',
+          }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px' }}>
+              <span style={{ fontSize: '20px', flexShrink: 0 }}>
+                {SITUATION_TYPES.find(t => t.name === activity.type)?.icon || '🎯'}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ color: '#f3f0ff', fontWeight: '700', fontSize: '14px',
+                  margin: '0 0 2px', overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {activity.name}
+                </p>
+                <p style={{ color: 'rgba(196,181,253,0.45)', fontSize: '11px', margin: 0 }}>
+                  {new Date(activity.scheduledDate).toLocaleDateString('en-GB', {
+                    weekday: 'short', day: 'numeric', month: 'short'
+                  })} · {new Date(activity.scheduledDate).toLocaleTimeString([], {
+                    hour: '2-digit', minute: '2-digit'
+                  })}
+                </p>
               </div>
-              <p className="text-sm text-purple-400">
-                {new Date(activity.scheduledDate).toLocaleDateString()} at {new Date(activity.scheduledDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ color: '#f472b6', fontWeight: '800', fontSize: '13px', margin: '0 0 1px' }}>
+                  {getTimeUntil(activity.scheduledDate)}
+                </p>
+                <p style={{ color: 'rgba(196,181,253,0.35)', fontSize: '10px', margin: 0 }}>away</p>
+              </div>
+            </div>
+
+            {/* Action steps */}
+            {activity.actionSteps?.length > 0 ? (
+              <div style={{
+                borderTop: '1px solid rgba(255,255,255,0.05)',
+                padding: '10px 14px',
+                background: 'rgba(79,70,229,0.06)',
+              }}>
+                <p style={{ color: 'rgba(196,181,253,0.4)', fontSize: '11px', fontWeight: '600',
+                  marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Your action steps
+                </p>
+                {activity.actionSteps.map((step, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    marginBottom: i < activity.actionSteps.length - 1 ? '6px' : 0,
+                  }}>
+                    <div style={{
+                      width: '16px', height: '16px', flexShrink: 0,
+                      borderRadius: '4px',
+                      border: '1.5px solid rgba(167,139,250,0.3)',
+                    }} />
+                    <p style={{ color: 'rgba(243,240,255,0.7)', fontSize: '12px', margin: 0 }}>
+                      {step.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                borderTop: '1px solid rgba(255,255,255,0.05)',
+                padding: '9px 14px',
+              }}>
+                <p style={{ color: 'rgba(196,181,253,0.3)', fontSize: '11px',
+                  fontStyle: 'italic', margin: 0 }}>
+                  No action steps — 
+                  <button onClick={() => setPlannerTab('plan')}
+                    style={{ background: 'none', border: 'none', color: 'rgba(167,139,250,0.5)',
+                      fontSize: '11px', cursor: 'pointer', padding: '0 0 0 4px', textDecoration: 'underline' }}>
+                    add some
+                  </button>
+                </p>
+              </div>
+            )}
+
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
+ 
+  {/* ── TAB: PLAN ───────────────────────────────────────────────────── */}
+  
+{plannerTab === 'plan' && (
+  <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+ 
+    {/* Progress bar — only visible once inside the funnel */}
+    {planStep > 0 && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '24px' }}>
+        {[1,2,3,4,5].map(s => (
+          <div key={s} style={{
+            height: '4px', flex: 1, borderRadius: '2px',
+            background: s <= planStep
+              ? 'linear-gradient(90deg,#4f46e5,#7c3aed)'
+              : 'rgba(255,255,255,0.08)',
+            transition: 'all 0.3s ease',
+          }} />
+        ))}
+      </div>
+    )}
+ 
+    {/* ══════════════════════════════════════════════
+        STEP 0 — Hero intro: this is YOUR action plan
+        ══════════════════════════════════════════════ */}
+    {planStep === 0 && (
+      <div style={{ animation: 'fadeSlideUp 0.35s ease' }}>
+ 
+        {/* Big icon */}
+        <div style={{
+          width: '64px', height: '64px',
+          background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
+          borderRadius: '20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: '20px',
+          boxShadow: '0 0 32px rgba(79,70,229,0.35)',
+        }}>
+          <span style={{ fontSize: '28px' }}>📋</span>
+        </div>
+ 
+        {/* Headline */}
+        <h2 style={{
+          color: '#f3f0ff', fontSize: '26px', fontWeight: '800',
+          lineHeight: '1.2', marginBottom: '12px',
+        }}>
+          Build your own<br />
+          <span style={{
+            background: 'linear-gradient(90deg,#a78bfa,#ec4899)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>
+            action plan
+          </span>
+        </h2>
+ 
+        <p style={{
+          color: 'rgba(196,181,253,0.7)', fontSize: '15px',
+          lineHeight: '1.7', marginBottom: '28px',
+        }}>
+          Most people avoid scary situations because they don't have a plan.
+          This is where you build one — on your terms, in your words.
+        </p>
+ 
+        {/* What you'll build — 3 pillars */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '32px' }}>
+          {[
+            {
+              emoji: '🎯',
+              title: 'A specific situation you commit to facing',
+              sub: 'Not "go to the gym someday" — a real date, a real time',
+            },
+            {
+              emoji: '💬',
+              title: 'Your own words for why it matters',
+              sub: 'Your anchor when anxiety tells you to cancel',
+            },
+            {
+              emoji: '✅',
+              title: 'A checklist of actions you\'ll take',
+              sub: 'Tiny steps you choose — not advice from a stranger',
+            },
+          ].map((item, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: '14px',
+              padding: '14px 16px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: '14px',
+            }}>
+              <div style={{
+                width: '36px', height: '36px', flexShrink: 0,
+                borderRadius: '10px',
+                background: 'rgba(79,70,229,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '18px',
+              }}>
+                {item.emoji}
+              </div>
+              <div>
+                <p style={{
+                  color: '#f3f0ff', fontWeight: '700', fontSize: '14px',
+                  margin: '0 0 3px',
+                }}>
+                  {item.title}
+                </p>
+                <p style={{
+                  color: 'rgba(196,181,253,0.5)', fontSize: '12px',
+                  margin: 0, lineHeight: '1.4',
+                }}>
+                  {item.sub}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+ 
+        {/* Existing plans count — if they have upcoming activities */}
+        {/* YOUR ACTIVE PLANS */}
+{upcomingActivities.length > 0 && (
+  <div style={{ marginBottom: '24px' }}>
+    <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '12px', fontWeight: '600',
+      textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+      Your active plans
+    </p>
+
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {upcomingActivities.map(activity => (
+        <div key={activity.id} style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '14px',
+          overflow: 'hidden',
+        }}>
+          {/* Header row */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: '13px 14px',
+          }}>
+            <span style={{ fontSize: '18px', flexShrink: 0 }}>
+              {SITUATION_TYPES.find(t => t.name === activity.type)?.icon || '🎯'}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ color: '#f3f0ff', fontWeight: '700', fontSize: '14px',
+                margin: '0 0 2px', overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {activity.name}
+              </p>
+              <p style={{ color: 'rgba(196,181,253,0.45)', fontSize: '11px', margin: 0 }}>
+                {new Date(activity.scheduledDate).toLocaleDateString('en-GB', {
+                  weekday: 'short', day: 'numeric', month: 'short'
+                })} · {new Date(activity.scheduledDate).toLocaleTimeString([], {
+                  hour: '2-digit', minute: '2-digit'
+                })}
               </p>
             </div>
-            <div className="text-right flex items-center gap-3">
-              <div>
-                <div className="text-2xl font-bold text-pink-400">{getTimeUntil(activity.scheduledDate)}</div>
-                <button
-                  onClick={() => setCheckInActivity(activity)}
-                  className="mt-2 px-3 py-1 bg-green-600 hover:bg-green-500 rounded-lg text-xs font-semibold transition-all"
-                >
-                  Check In
-                </button>
-              </div>
-              <button
-                onClick={() => deleteActivityFromFirestore(activity.id)}
-                className="p-2 hover:bg-red-900/50 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-4 h-4 text-red-400" />
-              </button>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <p style={{ color: '#f472b6', fontWeight: '800', fontSize: '13px', margin: '0 0 1px' }}>
+                {getTimeUntil(activity.scheduledDate)}
+              </p>
+              <p style={{ color: 'rgba(196,181,253,0.35)', fontSize: '10px', margin: 0 }}>away</p>
             </div>
           </div>
+
+          {/* Action steps checklist — only if they have some */}
+          {activity.actionSteps?.length > 0 && (
+            <div style={{
+              borderTop: '1px solid rgba(255,255,255,0.05)',
+              padding: '10px 14px',
+              background: 'rgba(79,70,229,0.06)',
+            }}>
+              <p style={{ color: 'rgba(196,181,253,0.4)', fontSize: '11px',
+                fontWeight: '600', marginBottom: '8px',
+                textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Your action steps
+              </p>
+              {activity.actionSteps.map((step, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  marginBottom: i < activity.actionSteps.length - 1 ? '6px' : 0,
+                }}>
+                  <div style={{
+                    width: '16px', height: '16px', flexShrink: 0,
+                    borderRadius: '4px',
+                    border: '1.5px solid rgba(167,139,250,0.3)',
+                    background: 'transparent',
+                  }} />
+                  <p style={{ color: 'rgba(243,240,255,0.7)', fontSize: '12px', margin: 0 }}>
+                    {step.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* No action steps nudge */}
+          {(!activity.actionSteps || activity.actionSteps.length === 0) && (
+            <div style={{
+              borderTop: '1px solid rgba(255,255,255,0.05)',
+              padding: '9px 14px',
+              display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
+              <p style={{ color: 'rgba(196,181,253,0.3)', fontSize: '11px',
+                fontStyle: 'italic', margin: 0 }}>
+                No action steps added yet
+              </p>
+            </div>
+          )}
         </div>
       ))}
     </div>
   </div>
 )}
+
+{/* CTA */}
+<button
+  onClick={() => setPlanStep(1)}
+  style={{
+    width: '100%', padding: '17px',
+    background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
+    border: 'none', borderRadius: '14px',
+    color: '#fff', fontWeight: '800', fontSize: '16px',
+    cursor: 'pointer',
+    boxShadow: '0 4px 28px rgba(79,70,229,0.4)',
+  }}
+>
+  {upcomingActivities.length > 0 ? '+ Build another plan' : 'Build my action plan →'}
+</button>
+ 
+        <p style={{
+          color: 'rgba(196,181,253,0.3)', fontSize: '11px',
+          textAlign: 'center', marginTop: '12px',
+        }}>
+          Takes about 2 minutes · Saved to your account
+        </p>
+      </div>
+    )}
+ 
+    {/* ══════════════════════════════════════════════
+        STEP 1 — What kind of situation?
+        ══════════════════════════════════════════════ */}
+    {planStep === 1 && (
+      <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+        <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '12px', fontWeight: '600',
+          textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          Step 1 of 5
+        </p>
+        <h3 style={{ color: '#f3f0ff', fontSize: '22px', fontWeight: '700',
+          marginBottom: '6px', lineHeight: '1.2' }}>
+          What kind of situation is this?
+        </h3>
+        <p style={{ color: 'rgba(196,181,253,0.55)', fontSize: '14px',
+          marginBottom: '24px', lineHeight: '1.5' }}>
+          Pick the closest match — it loads your prep kit automatically.
+        </p>
+ 
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {SITUATION_TYPES.map(type => (
+            <button
+              key={type.id}
+              onClick={() => {
+                setPlanDraft(d => ({ ...d, type: type.id, typeName: type.name }));
+                setTimeout(() => setPlanStep(2), 180);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '14px',
+                padding: '15px 16px', borderRadius: '14px',
+                border: planDraft.type === type.id
+                  ? '1.5px solid rgba(167,139,250,0.7)'
+                  : '1px solid rgba(255,255,255,0.08)',
+                background: planDraft.type === type.id
+                  ? 'rgba(124,58,237,0.18)'
+                  : 'rgba(255,255,255,0.03)',
+                cursor: 'pointer', transition: 'all 0.15s ease',
+                textAlign: 'left', width: '100%',
+              }}
+            >
+              <span style={{ fontSize: '22px', flexShrink: 0 }}>{type.icon}</span>
+              <p style={{ color: '#f3f0ff', fontWeight: '600', fontSize: '14px', margin: 0 }}>
+                {type.name}
+              </p>
+              <span style={{ marginLeft: 'auto', color: 'rgba(167,139,250,0.4)', fontSize: '18px' }}>›</span>
+            </button>
+          ))}
+        </div>
+ 
+        <button
+          onClick={() => setPlanStep(0)}
+          style={{
+            width: '100%', marginTop: '16px', padding: '12px',
+            background: 'none', border: 'none',
+            color: 'rgba(196,181,253,0.35)', fontSize: '13px',
+            cursor: 'pointer',
+          }}
+        >
+          ← Back to overview
+        </button>
+      </div>
+    )}
+ 
+    {/* STEPS 2–5: paste your existing step 2, 3, 4, 5 blocks here unchanged */}
+    {/* The only change is that Back on step 1 now goes to planStep(0) not nothing */}
+ 
+    {planStep === 2 && (
+      <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+        <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '12px', fontWeight: '600',
+          textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          Step 2 of 5
+        </p>
+        <h3 style={{ color: '#f3f0ff', fontSize: '22px', fontWeight: '700',
+          marginBottom: '6px', lineHeight: '1.2' }}>
+          What exactly, and when?
+        </h3>
+        <p style={{ color: 'rgba(196,181,253,0.55)', fontSize: '14px',
+          marginBottom: '24px', lineHeight: '1.5' }}>
+          Be specific — "Doctor appointment for persistent cough on Tuesday" beats "doctor visit".
+        </p>
+ 
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          padding: '5px 12px', borderRadius: '20px',
+          background: 'rgba(79,70,229,0.15)',
+          border: '1px solid rgba(79,70,229,0.25)',
+          marginBottom: '20px',
+        }}>
+          <span style={{ fontSize: '14px' }}>{SITUATION_TYPES.find(t => t.id === planDraft.type)?.icon}</span>
+          <span style={{ color: '#a78bfa', fontSize: '12px', fontWeight: '600' }}>{planDraft.typeName}</span>
+          <button onClick={() => setPlanStep(1)} style={{ background:'none', border:'none', color:'rgba(167,139,250,0.5)', cursor:'pointer', fontSize:'14px', padding:'0 0 0 4px', lineHeight:1 }}>×</button>
+        </div>
+ 
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <p style={{ color:'rgba(196,181,253,0.6)', fontSize:'12px', fontWeight:'600', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Describe it</p>
+            <input
+              type="text"
+              value={planDraft.name}
+              onChange={e => setPlanDraft(d => ({ ...d, name: e.target.value }))}
+              placeholder={
+                planDraft.type === 'medical' ? 'e.g. GP appointment about persistent headaches' :
+                planDraft.type === 'social'  ? "e.g. Friend's birthday dinner with new people" :
+                planDraft.type === 'work'    ? 'e.g. Ask manager about flexible hours' :
+                planDraft.type === 'phone'   ? 'e.g. Call to dispute a bank charge' :
+                planDraft.type === 'public'  ? 'e.g. First time at the new gym' :
+                'e.g. Describe the situation'
+              }
+              autoFocus
+              style={{ width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'14px 16px', color:'#f3f0ff', fontSize:'15px', outline:'none' }}
+            />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
+            <div>
+              <p style={{ color:'rgba(196,181,253,0.6)', fontSize:'12px', fontWeight:'600', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Date</p>
+              <input type="date" value={planDraft.date} onChange={e => setPlanDraft(d => ({ ...d, date: e.target.value }))} min={new Date().toISOString().split('T')[0]}
+                style={{ width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'12px 14px', color:'#f3f0ff', fontSize:'14px', outline:'none' }} />
+            </div>
+            <div>
+              <p style={{ color:'rgba(196,181,253,0.6)', fontSize:'12px', fontWeight:'600', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Time</p>
+              <input type="time" value={planDraft.time} onChange={e => setPlanDraft(d => ({ ...d, time: e.target.value }))}
+                style={{ width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'12px 14px', color:'#f3f0ff', fontSize:'14px', outline:'none' }} />
+            </div>
+          </div>
+        </div>
+ 
+        <div style={{ display:'flex', gap:'10px', marginTop:'24px' }}>
+          <button onClick={() => setPlanStep(1)} style={{ flex:1, padding:'13px', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'12px', color:'rgba(196,181,253,0.6)', fontWeight:'600', fontSize:'14px', cursor:'pointer' }}>← Back</button>
+          <button onClick={() => {
+            if (!planDraft.name.trim()) { showNotification('Describe the situation first'); return; }
+            if (!planDraft.date || !planDraft.time) { showNotification('Set a date and time'); return; }
+            setPlanStep(3);
+          }} style={{ flex:2, padding:'13px', background:'linear-gradient(135deg,#4f46e5,#7c3aed)', border:'none', borderRadius:'12px', color:'#fff', fontWeight:'700', fontSize:'14px', cursor:'pointer', boxShadow:'0 4px 16px rgba(79,70,229,0.35)' }}>Continue →</button>
+        </div>
+      </div>
+    )}
+ 
+    {planStep === 3 && (
+      <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+        <p style={{ color:'rgba(196,181,253,0.5)', fontSize:'12px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Step 3 of 5</p>
+        <h3 style={{ color:'#f3f0ff', fontSize:'22px', fontWeight:'700', marginBottom:'6px', lineHeight:'1.2' }}>How does this feel right now?</h3>
+        <p style={{ color:'rgba(196,181,253,0.55)', fontSize:'14px', marginBottom:'24px', lineHeight:'1.5' }}>Be honest — this is your baseline. We'll compare it to how you feel after.</p>
+ 
+        <div style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'20px', padding:'28px 20px', textAlign:'center', marginBottom:'20px' }}>
+          <div style={{ fontSize:'52px', marginBottom:'6px' }}>{planDraft.anxiety <= 3 ? '😌' : planDraft.anxiety <= 6 ? '😰' : '😱'}</div>
+          <div style={{ fontSize:'52px', fontWeight:'800', lineHeight:1, color: planDraft.anxiety <= 3 ? '#4ade80' : planDraft.anxiety <= 6 ? '#facc15' : '#f87171', marginBottom:'6px' }}>
+            {planDraft.anxiety}<span style={{ fontSize:'22px', opacity:0.4 }}>/10</span>
+          </div>
+          <p style={{ color:'rgba(196,181,253,0.5)', fontSize:'13px', margin:0 }}>
+            {planDraft.anxiety <= 2 ? "Barely anxious — that's great"
+              : planDraft.anxiety <= 4 ? 'Mild nerves — manageable'
+              : planDraft.anxiety <= 6 ? "Moderate anxiety — you're feeling it"
+              : planDraft.anxiety <= 8 ? 'High anxiety — this takes real courage'
+              : "Very high — we'll help you prepare well"}
+          </p>
+        </div>
+ 
+        <input type="range" min="1" max="10" step="1" value={planDraft.anxiety}
+          onChange={e => setPlanDraft(d => ({ ...d, anxiety: parseInt(e.target.value) }))}
+          style={{ width:'100%', marginBottom:'24px' }} />
+ 
+        <div style={{ marginBottom:'24px' }}>
+          <p style={{ color:'rgba(196,181,253,0.6)', fontSize:'12px', fontWeight:'600', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Why are you doing this anyway? (your anchor)</p>
+          <textarea value={planDraft.why} onChange={e => setPlanDraft(d => ({ ...d, why: e.target.value }))}
+            placeholder="e.g. I can't keep avoiding my health. I need answers more than I need comfort."
+            rows={3}
+            style={{ width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'12px 14px', color:'#f3f0ff', fontSize:'14px', outline:'none', resize:'none', lineHeight:'1.5' }} />
+          <p style={{ color:'rgba(196,181,253,0.35)', fontSize:'11px', marginTop:'6px' }}>When anxiety spikes and you want to cancel — this is what you'll read.</p>
+        </div>
+ 
+        <div style={{ display:'flex', gap:'10px' }}>
+          <button onClick={() => setPlanStep(2)} style={{ flex:1, padding:'13px', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'12px', color:'rgba(196,181,253,0.6)', fontWeight:'600', fontSize:'14px', cursor:'pointer' }}>← Back</button>
+          <button onClick={() => setPlanStep(4)} style={{ flex:2, padding:'13px', background:'linear-gradient(135deg,#4f46e5,#7c3aed)', border:'none', borderRadius:'12px', color:'#fff', fontWeight:'700', fontSize:'14px', cursor:'pointer', boxShadow:'0 4px 16px rgba(79,70,229,0.35)' }}>Continue →</button>
+        </div>
+      </div>
+    )}
+ 
+    {planStep === 4 && (
+      <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+        <p style={{ color:'rgba(196,181,253,0.5)', fontSize:'12px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Step 4 of 5</p>
+        <h3 style={{ color:'#f3f0ff', fontSize:'22px', fontWeight:'700', marginBottom:'6px', lineHeight:'1.2' }}>What will you actually do?</h3>
+        <p style={{ color:'rgba(196,181,253,0.55)', fontSize:'14px', marginBottom:'20px', lineHeight:'1.5' }}>
+          These are <strong style={{ color:'#c4b5fd' }}>your</strong> actions — written by you, owned by you.
+          Tap suggestions or write your own. This becomes your personal checklist on the day.
+        </p>
+ 
+        {planDraft.type && (() => {
+          const suggestions = {
+            medical: ['Arrive 10 minutes early','Write my symptoms down beforehand','Bring my medications list','Ask at least one question I prepared','Request a copy of any test results'],
+            social:  ['Set a minimum time (30 min) then I can leave','Introduce myself to one new person','Use a conversation starter I prepared','Take a bathroom break if overwhelmed','Message a friend before I go in'],
+            work:    ['Write my key points beforehand','Practice saying the main thing out loud','Bring notes I can refer to','Say "I need a moment to think" if stuck','Follow up in writing after'],
+            phone:   ['Write down what I need to say first','Have a glass of water nearby','Call at a quiet time','Say "can I call you back?" if overwhelmed','Have account details ready'],
+            public:  ['Go at an off-peak time','Have headphones in','Set a 15-minute minimum','Look up the layout beforehand','Bring what I need so I don\'t have to ask'],
+          };
+          const list = suggestions[planDraft.type] || suggestions.public;
+          const added = new Set(planDraft.actionSteps.map(s => s.text));
+          return (
+            <div style={{ marginBottom:'16px' }}>
+              <p style={{ color:'rgba(196,181,253,0.4)', fontSize:'11px', fontWeight:'600', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                Tap to add — or write your own below
+              </p>
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                {list.map((tip, i) => {
+                  const isAdded = added.has(tip);
+                  return (
+                    <button key={i}
+                      onClick={() => {
+                        if (isAdded) {
+                          setPlanDraft(d => ({ ...d, actionSteps: d.actionSteps.filter(s => s.text !== tip) }));
+                        } else {
+                          setPlanDraft(d => ({ ...d, actionSteps: [...d.actionSteps, { id: Date.now().toString()+i, text: tip, completed: false }] }));
+                        }
+                      }}
+                      style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', borderRadius:'10px', border: isAdded ? '1px solid rgba(79,70,229,0.4)' : '1px solid rgba(255,255,255,0.07)', background: isAdded ? 'rgba(79,70,229,0.15)' : 'rgba(255,255,255,0.03)', cursor:'pointer', textAlign:'left', width:'100%', transition:'all 0.15s ease' }}>
+                      <div style={{ width:'20px', height:'20px', flexShrink:0, borderRadius:'6px', border: isAdded ? 'none' : '1.5px solid rgba(167,139,250,0.3)', background: isAdded ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', color:'#fff', transition:'all 0.15s ease' }}>
+                        {isAdded ? '✓' : ''}
+                      </div>
+                      <span style={{ color: isAdded ? '#c4b5fd' : 'rgba(243,240,255,0.75)', fontSize:'13px' }}>{tip}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+ 
+        <div style={{ background:'rgba(79,70,229,0.08)', border:'1px solid rgba(79,70,229,0.2)', borderRadius:'12px', padding:'14px', marginBottom:'16px' }}>
+          <p style={{ color:'rgba(196,181,253,0.5)', fontSize:'11px', fontWeight:'600', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Write your own step</p>
+          <div style={{ display:'flex', gap:'8px' }}>
+            <input type="text" value={planNewStep} onChange={e => setPlanNewStep(e.target.value)}
+              onKeyDown={e => { if (e.key==='Enter' && planNewStep.trim()) { setPlanDraft(d => ({ ...d, actionSteps:[...d.actionSteps,{id:Date.now().toString(),text:planNewStep.trim(),completed:false}] })); setPlanNewStep(''); }}}
+              placeholder="e.g. Bring my list of symptoms"
+              style={{ flex:1, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(79,70,229,0.25)', borderRadius:'9px', padding:'10px 12px', color:'#f3f0ff', fontSize:'13px', outline:'none' }} />
+            <button onClick={() => { if (!planNewStep.trim()) return; setPlanDraft(d => ({ ...d, actionSteps:[...d.actionSteps,{id:Date.now().toString(),text:planNewStep.trim(),completed:false}] })); setPlanNewStep(''); }}
+              style={{ padding:'10px 16px', borderRadius:'9px', border:'none', background:'rgba(79,70,229,0.35)', color:'#a78bfa', fontWeight:'700', fontSize:'18px', cursor:'pointer', lineHeight:1 }}>+</button>
+          </div>
+        </div>
+ 
+        {planDraft.actionSteps.length > 0 && (
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px', padding:'10px 14px', background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.2)', borderRadius:'10px' }}>
+            <span style={{ fontSize:'14px' }}>✓</span>
+            <p style={{ color:'#4ade80', fontSize:'13px', fontWeight:'600', margin:0 }}>
+              {planDraft.actionSteps.length} action step{planDraft.actionSteps.length > 1 ? 's' : ''} in your plan
+            </p>
+          </div>
+        )}
+ 
+        <div style={{ display:'flex', gap:'10px' }}>
+          <button onClick={() => setPlanStep(3)} style={{ flex:1, padding:'13px', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'12px', color:'rgba(196,181,253,0.6)', fontWeight:'600', fontSize:'14px', cursor:'pointer' }}>← Back</button>
+          <button onClick={() => setPlanStep(5)} style={{ flex:2, padding:'13px', background:'linear-gradient(135deg,#4f46e5,#7c3aed)', border:'none', borderRadius:'12px', color:'#fff', fontWeight:'700', fontSize:'14px', cursor:'pointer', boxShadow:'0 4px 16px rgba(79,70,229,0.35)' }}>
+            {planDraft.actionSteps.length === 0 ? 'Skip for now →' : 'Continue →'}
+          </button>
+        </div>
+      </div>
+    )}
+ 
+    {planStep === 5 && (
+      <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+        <p style={{ color:'rgba(196,181,253,0.5)', fontSize:'12px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'8px' }}>Step 5 of 5</p>
+        <h3 style={{ color:'#f3f0ff', fontSize:'22px', fontWeight:'700', marginBottom:'6px', lineHeight:'1.2' }}>Your action plan</h3>
+        <p style={{ color:'rgba(196,181,253,0.55)', fontSize:'14px', marginBottom:'20px', lineHeight:'1.5' }}>This is yours. Review it, then lock it in.</p>
+ 
+        <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:'16px', overflow:'hidden', marginBottom:'20px' }}>
+          <div style={{ padding:'16px', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
+              <span style={{ fontSize:'18px' }}>{SITUATION_TYPES.find(t => t.id === planDraft.type)?.icon}</span>
+              <span style={{ color:'#a78bfa', fontSize:'12px', fontWeight:'600' }}>{planDraft.typeName}</span>
+            </div>
+            <p style={{ color:'#f3f0ff', fontWeight:'700', fontSize:'16px', margin:0 }}>{planDraft.name}</p>
+          </div>
+ 
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
+            {[
+              { label:'Date', val: planDraft.date ? new Date(planDraft.date+'T12:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—' },
+              { label:'Time', val: planDraft.time || '—' },
+              { label:'Anxiety', val: `${planDraft.anxiety}/10 ${getAnxietyEmoji(planDraft.anxiety)}` },
+            ].map((cell,i) => (
+              <div key={i} style={{ padding:'12px 14px', borderRight: i<2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                <p style={{ color:'rgba(196,181,253,0.45)', fontSize:'10px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'3px' }}>{cell.label}</p>
+                <p style={{ color:'#f3f0ff', fontSize:'13px', fontWeight:'600', margin:0 }}>{cell.val}</p>
+              </div>
+            ))}
+          </div>
+ 
+          {planDraft.why && (
+            <div style={{ padding:'14px 16px', borderBottom: planDraft.actionSteps.length > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+              <p style={{ color:'rgba(196,181,253,0.45)', fontSize:'10px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'5px' }}>Your why</p>
+              <p style={{ color:'rgba(243,240,255,0.75)', fontSize:'13px', fontStyle:'italic', margin:0, lineHeight:'1.5' }}>"{planDraft.why}"</p>
+            </div>
+          )}
+ 
+          {planDraft.actionSteps.length > 0 && (
+            <div style={{ padding:'14px 16px' }}>
+              <p style={{ color:'rgba(196,181,253,0.45)', fontSize:'10px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'10px' }}>
+                Your {planDraft.actionSteps.length} action step{planDraft.actionSteps.length > 1 ? 's' : ''}
+              </p>
+              {planDraft.actionSteps.map((s,i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom: i<planDraft.actionSteps.length-1 ? '8px' : 0 }}>
+                  <div style={{ width:'18px', height:'18px', borderRadius:'5px', border:'1.5px solid rgba(167,139,250,0.3)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:'rgba(167,139,250,0.2)' }} />
+                  </div>
+                  <p style={{ color:'rgba(243,240,255,0.8)', fontSize:'13px', margin:0 }}>{s.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+ 
+        <button
+          onClick={async () => {
+            const scheduledDateTime = new Date(`${planDraft.date}T${planDraft.time}`).getTime();
+            if (isNaN(scheduledDateTime)) { showNotification('Invalid date/time'); return; }
+            const activity = {
+              name: planDraft.name.trim(),
+              type: planDraft.typeName || 'Other',
+              scheduledDate: scheduledDateTime,
+              why: planDraft.why.trim(),
+              preAnxiety: planDraft.anxiety,
+              actionSteps: planDraft.actionSteps,
+              completed: false,
+              createdAt: Date.now(),
+            };
+            await saveActivityToFirebase(activity);
+            showNotification('🔒 Plan saved! You built that.');
+            resetPlanFunnel();
+            setPlannerTab('ladder');
+          }}
+          style={{ width:'100%', padding:'16px', background:'linear-gradient(135deg,#059669,#0891b2)', border:'none', borderRadius:'14px', color:'#fff', fontWeight:'800', fontSize:'16px', cursor:'pointer', boxShadow:'0 4px 24px rgba(5,150,105,0.35)', marginBottom:'10px' }}
+        >
+          Lock it in 🔒
+        </button>
+        <button onClick={() => setPlanStep(4)} style={{ width:'100%', padding:'12px', background:'none', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'12px', color:'rgba(196,181,253,0.5)', fontWeight:'500', fontSize:'13px', cursor:'pointer' }}>
+          ← Edit action steps
+        </button>
+      </div>
+    )}
+ 
+  </div>
+)}
+
+ 
+  {/* ── TAB: PREP ───────────────────────────────────────────────────── */}
+  {plannerTab === 'prep' && (
+    <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+ 
+      {/* Situation picker */}
+      <p style={{ color: 'rgba(196,181,253,0.6)', fontSize: '12px', fontWeight: '600', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Pick a situation to prep for
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '20px' }}>
+        {SITUATION_TYPES.map(type => (
+          <button
+            key={type.id}
+            onClick={() => setNewActivityType(
+              newActivityType === type.name ? '' : type.name
+            )}
+            style={{
+              padding: '10px 6px', borderRadius: '12px',
+              border: newActivityType === type.name
+                ? '1.5px solid rgba(167,139,250,0.7)'
+                : '1px solid rgba(255,255,255,0.07)',
+              background: newActivityType === type.name
+                ? 'rgba(124,58,237,0.2)'
+                : 'rgba(255,255,255,0.03)',
+              cursor: 'pointer', transition: 'all 0.15s ease', textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '18px', marginBottom: '3px' }}>{type.icon}</div>
+            <p style={{ color: '#f3f0ff', fontSize: '10px', fontWeight: '600', margin: 0 }}>{type.name}</p>
+          </button>
+        ))}
+      </div>
+ 
+      {/* Show prep kit inline */}
+      {newActivityType && (() => {
+        const typeId = SITUATION_TYPES.find(t => t.name === newActivityType)?.id;
+        const kit = PREP_KITS[typeId];
+        if (!kit) return (
+          <p style={{ color: 'rgba(196,181,253,0.5)', textAlign: 'center', padding: '20px' }}>
+            No prep kit for this type yet
+          </p>
+        );
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {kit.sections.map((section, si) => (
+              <div key={si} style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '14px', overflow: 'hidden',
+              }}>
+                <div style={{
+                  padding: '12px 16px',
+                  background: 'rgba(79,70,229,0.12)',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                }}>
+                  <span style={{ fontSize: '14px' }}>📌</span>
+                  <p style={{ color: '#c4b5fd', fontWeight: '700', fontSize: '13px', margin: 0 }}>{section.title}</p>
+                </div>
+                <div style={{ padding: '4px 0' }}>
+                  {section.items.map((item, ii) => (
+                    <div key={ii} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: '10px',
+                      padding: '10px 16px',
+                      borderBottom: ii < section.items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                    }}>
+                      <div style={{
+                        width: '20px', height: '20px', flexShrink: 0,
+                        borderRadius: '6px',
+                        background: 'rgba(79,70,229,0.2)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '10px', fontWeight: '700', color: '#a78bfa',
+                        marginTop: '1px',
+                      }}>
+                        {ii + 1}
+                      </div>
+                      <p style={{ color: 'rgba(243,240,255,0.8)', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+                        {item}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+ 
+            {/* Grounding techniques */}
+            <div style={{
+              background: 'rgba(6,182,212,0.08)',
+              border: '1px solid rgba(6,182,212,0.2)',
+              borderRadius: '14px', padding: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '16px' }}>⚡</span>
+                <p style={{ color: '#67e8f9', fontWeight: '700', fontSize: '13px', margin: 0 }}>
+                  If you freeze or panic during
+                </p>
+              </div>
+              {GROUNDING_TECHNIQUES.map((t, ti) => (
+                <div key={ti} style={{ marginBottom: ti < GROUNDING_TECHNIQUES.length - 1 ? '10px' : 0 }}>
+                  <p style={{ color: '#a5f3fc', fontWeight: '600', fontSize: '12px', marginBottom: '4px' }}>→ {t.name}</p>
+                  <p style={{ color: 'rgba(165,243,252,0.6)', fontSize: '11px', lineHeight: '1.5', margin: 0 }}>
+                    {t.steps.join(' · ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+ 
+            {/* CTA */}
+            <button
+              onClick={() => {
+                setShowBreathing(true);
+              }}
+              style={{
+                width: '100%', padding: '13px',
+                background: 'rgba(79,70,229,0.2)',
+                border: '1px solid rgba(79,70,229,0.3)',
+                borderRadius: '12px',
+                color: '#c4b5fd', fontWeight: '600', fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              🌬 Do a breathing exercise first
+            </button>
+          </div>
+        );
+      })()}
+ 
+      {!newActivityType && (
+        <div style={{
+          textAlign: 'center', padding: '40px 20px',
+          background: 'rgba(255,255,255,0.02)',
+          borderRadius: '16px',
+          border: '1px dashed rgba(255,255,255,0.08)',
+        }}>
+          <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.4 }}>🎒</div>
+          <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '14px' }}>
+            Pick a situation above to see your prep kit
+          </p>
+        </div>
+      )}
+    </div>
+  )}
+ 
+  {/* ── TAB: HISTORY ────────────────────────────────────────────────── */}
+  {plannerTab === 'history' && (
+    <div style={{ animation: 'fadeSlideUp 0.3s ease' }}>
+      {completedActivities.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '40px 20px',
+          background: 'rgba(255,255,255,0.02)',
+          borderRadius: '16px',
+          border: '1px dashed rgba(255,255,255,0.08)',
+        }}>
+          <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.4 }}>📈</div>
+          <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '14px' }}>
+            No completed activities yet — check in after your first one
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {completedActivities.map(activity => {
+            const drop = (activity.preAnxiety || 0) - (activity.postAnxiety || 0);
+            const isExpanded = expandedInteraction === activity.id;
+ 
+            return (
+              <div key={activity.id} style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '14px',
+                overflow: 'hidden',
+              }}>
+                {/* Summary row */}
+                <button
+                  onClick={() => setExpandedInteraction(isExpanded ? null : activity.id)}
+                  style={{
+                    width: '100%', background: 'none', border: 'none',
+                    padding: '14px 16px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{
+                    width: '36px', height: '36px', flexShrink: 0,
+                    borderRadius: '10px',
+                    background: drop >= 3
+                      ? 'rgba(5,150,105,0.2)'
+                      : drop > 0
+                      ? 'rgba(234,179,8,0.2)'
+                      : 'rgba(99,102,241,0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '16px',
+                  }}>
+                    {drop >= 3 ? '🎉' : drop > 0 ? '💪' : '🏃'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ color: '#f3f0ff', fontWeight: '600', fontSize: '14px', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activity.name}
+                    </p>
+                    <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '12px', margin: 0 }}>
+                      {new Date(activity.completedDate).toLocaleDateString()} · {activity.type}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{
+                      fontSize: '15px', fontWeight: '800', margin: '0 0 2px',
+                      color: drop > 0 ? '#4ade80' : drop === 0 ? '#facc15' : '#f87171',
+                    }}>
+                      {drop > 0 ? `↓${drop}` : drop === 0 ? '→0' : `↑${Math.abs(drop)}`}
+                    </p>
+                    <p style={{ color: 'rgba(196,181,253,0.4)', fontSize: '10px', margin: 0 }}>anxiety</p>
+                  </div>
+                  <span style={{ color: 'rgba(196,181,253,0.4)', fontSize: '16px', marginLeft: '4px' }}>
+                    {isExpanded ? '▲' : '▼'}
+                  </span>
+                </button>
+ 
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div style={{
+                    padding: '0 16px 16px',
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    paddingTop: '14px',
+                  }}>
+                    {/* Before / After */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                      {[
+                        { label: 'Before', val: activity.preAnxiety, bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.2)' },
+                        { label: 'After',  val: activity.postAnxiety, bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.2)'  },
+                      ].map(cell => (
+                        <div key={cell.label} style={{
+                          background: cell.bg, border: `1px solid ${cell.border}`,
+                          borderRadius: '10px', padding: '10px 12px',
+                        }}>
+                          <p style={{ color: 'rgba(196,181,253,0.6)', fontSize: '11px', margin: '0 0 4px' }}>{cell.label}</p>
+                          <p style={{ color: '#f3f0ff', fontSize: '22px', fontWeight: '800', margin: 0 }}>
+                            {cell.val}/10 <span style={{ fontSize: '16px' }}>{getAnxietyEmoji(cell.val)}</span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+ 
+                    {activity.wasItBad && (
+                      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 12px', marginBottom: '8px' }}>
+                        <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '11px', marginBottom: '3px' }}>Was it as bad as feared?</p>
+                        <p style={{ color: '#f3f0ff', fontSize: '13px', margin: 0 }}>{activity.wasItBad}</p>
+                      </div>
+                    )}
+ 
+                    {activity.reflection && (
+                      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 12px', marginBottom: '8px' }}>
+                        <p style={{ color: 'rgba(196,181,253,0.5)', fontSize: '11px', marginBottom: '3px' }}>Reflection</p>
+                        <p style={{ color: '#f3f0ff', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>{activity.reflection}</p>
+                      </div>
+                    )}
+ 
+                    {/* Action steps checklist (if saved) */}
+                    {activity.actionSteps?.length > 0 && (
+                      <div style={{ background: 'rgba(79,70,229,0.08)', border: '1px solid rgba(79,70,229,0.15)', borderRadius: '10px', padding: '12px' }}>
+                        <p style={{ color: '#c4b5fd', fontWeight: '600', fontSize: '12px', marginBottom: '8px' }}>Action steps</p>
+                        {activity.actionSteps.map((s, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                            <div style={{
+                              width: '16px', height: '16px', borderRadius: '4px',
+                              background: s.completed ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.08)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '9px', color: '#4ade80', flexShrink: 0,
+                            }}>
+                              {s.completed ? '✓' : ''}
+                            </div>
+                            <p style={{ color: 'rgba(243,240,255,0.7)', fontSize: '12px', margin: 0 }}>{s.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+ 
+                    <button
+                      onClick={() => deleteActivityFromFirestore(activity.id)}
+                      style={{
+                        marginTop: '10px', padding: '8px 14px',
+                        background: 'none', border: '1px solid rgba(248,113,113,0.2)',
+                        borderRadius: '8px', color: 'rgba(248,113,113,0.6)',
+                        fontSize: '12px', cursor: 'pointer',
+                      }}
+                    >
+                      Delete record
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  )}
+ 
+</div>
+
+
+{/* ACHIEVEMENTS */}
+<div data-tour="achievements-section" className="mb-6">
+  <button
+    onClick={() => setAchievementsOpen(prev => !prev)}
+    className="flex items-center gap-2 text-purple-300 hover:text-purple-100 transition-colors mb-2"
+  >
+    <Award className="w-4 h-4 text-yellow-400" />
+    <span className="text-sm font-semibold text-purple-100">Achievements</span>
+    <span className="text-xs text-purple-400 ml-1">
+      ({achievementsData.filter(a => a.unlocked).length}/{achievementsData.length})
+    </span>
+    <ChevronDown
+      className={`w-3 h-3 text-purple-400 transition-transform ml-auto ${achievementsOpen ? 'rotate-180' : ''}`}
+    />
+  </button>
+
+  {achievementsOpen && (
+    <div className="bg-gradient-to-br from-purple-900/50 to-indigo-900/50 backdrop-blur-md px-4 py-3 rounded-2xl border border-purple-500/30 shadow-xl overflow-x-auto">
+      <div className="flex gap-3 w-max">
+        {achievementsData.map(achievement => (
+          <div
+            key={achievement.id}
+            className={`flex-shrink-0 w-28 p-3 rounded-xl border text-center transition-all ${
+              achievement.unlocked
+                ? 'bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-md'
+                : 'bg-purple-950/40 border-purple-700/30 opacity-60'
+            }`}
+          >
+            <div className="text-2xl mb-1">{achievement.icon}</div>
+            <p className="text-xs font-bold text-purple-100 leading-tight mb-1">{achievement.title}</p>
+            <p className="text-[10px] text-purple-400 mb-1.5">{achievement.progress}/{achievement.threshold}</p>
+            {!achievement.unlocked && (
+              <div className="h-1 bg-purple-900/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                  style={{ width: `${Math.min((achievement.progress / achievement.threshold) * 100, 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+</div>
+
+
+
+{/* UPCOMING ACTIVITIES */}
+
 
 {/* COMPLETED HISTORY */}
 {completedActivities.length > 0 && (
@@ -1982,1093 +3035,13 @@ I Feel Better Now
 )}
 
 {/* INTERACTION PLANNER MODAL */}
-{showInteractionPlanner && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div className="bg-gradient-to-br from-indigo-900/95 to-purple-900/95 backdrop-blur-xl p-6 rounded-3xl border-2 border-indigo-500/50 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-      
-      {/* ⭐ ADD THIS INLINE TOUR OVERLAY ⭐ */}
-      {interactionPlannerTourStep > 0 && getCurrentTourStep() && (
-        <>
-          
-
-          {/* Tour Highlight Styles */}
-          <style jsx>{`
-            @keyframes tourPulse {
-              0%, 100% {
-                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7),
-                            0 0 0 4px rgba(168, 85, 247, 0.4),
-                            0 0 20px 8px rgba(168, 85, 247, 0.3);
-              }
-              50% {
-                box-shadow: 0 0 0 8px rgba(168, 85, 247, 0.4),
-                            0 0 0 12px rgba(168, 85, 247, 0.2),
-                            0 0 30px 15px rgba(168, 85, 247, 0.2);
-              }
-            }
-            
-            .tour-highlight-element {
-              position: relative !important;
-              z-index: 101 !important;
-              animation: tourPulse 2s ease-in-out infinite;
-              border-radius: 12px;
-              outline: 4px solid rgba(168, 85, 247, 0.8) !important;
-              outline-offset: 4px;
-              pointer-events: auto !important;
-            }
-          `}</style>
-
-          {/* Tour Popover */}
-          <TourPopover 
-            step={getCurrentTourStep()}
-            currentStep={interactionPlannerTourStep}
-            totalSteps={INTERACTION_PLANNER_TOUR_STEPS.length}
-            onNext={handleNextTourStep}
-            onSkip={handleSkipTour}
-          />
-        </>
-      )}
-
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-xl">
-            <Calendar className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Interaction Planner</h2>
-            <p className="text-sm text-indigo-300">Prepare for anxiety-inducing situations</p>
-          </div>
-        </div>
-       <button
-  onClick={() => {
-    setShowInteractionPlanner(false);
-    handleComplete();
-  }}
-  className="p-2 hover:bg-indigo-800/50 rounded-lg transition-colors"
->
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-  </svg>
-</button>
-      </div>
-
-      {/* MAIN SECTIONS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        
-        {/* EXPOSURE HIERARCHY */}
-        <button
-          onClick={() => {
-            setShowInteractionPlanner(false);
-            setShowExposureHierarchy(true);
-          }}
-          id="exposure-hierarchy-section"
-          className="p-6 bg-gradient-to-br from-purple-800/60 to-pink-900/60 rounded-2xl border-2 border-purple-500/30 hover:border-purple-400/50 transition-all text-left group"
-        >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-12 h-12 bg-purple-600/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <TrendingUp className="w-6 h-6 text-purple-300" />
-            </div>
-            <ArrowRight className="w-5 h-5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">My Exposure Hierarchy</h3>
-          <p className="text-sm text-purple-300 mb-3">Visual ladder of feared situations ranked by difficulty</p>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-purple-900/50 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 w-1/3"></div>
-            </div>
-            <span className="text-xs text-purple-400">{exposureHierarchy.length} steps</span>
-          </div>
-        </button>
-
-        {/* UPCOMING INTERACTIONS */}
-        <button
-          onClick={() => {
-            // Scroll to upcoming activities section
-            setShowInteractionPlanner(false);
-            document.querySelector('#upcoming-section')?.scrollIntoView({ behavior: 'smooth' });
-          }}
-          className="p-6 bg-gradient-to-br from-blue-800/60 to-indigo-900/60 rounded-2xl border-2 border-blue-500/30 hover:border-blue-400/50 transition-all text-left group"
-        >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-12 h-12 bg-blue-600/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Clock className="w-6 h-6 text-blue-300" />
-            </div>
-            <ArrowRight className="w-5 h-5 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Upcoming Interactions</h3>
-          <p className="text-sm text-blue-300 mb-3">View and manage planned exposures</p>
-          <div className="flex items-center gap-2 text-sm">
-            <Bell className="w-4 h-4 text-blue-400" />
-            <span className="text-blue-300">{upcomingActivities.length} scheduled</span>
-          </div>
-        </button>
-
-      </div>
-
-      {/* PLAN NEW INTERACTION */}
-      <div className="bg-gradient-to-br from-indigo-950/80 to-purple-950/80 rounded-2xl border-2 border-indigo-500/30 p-6 mb-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Plus className="w-6 h-6 text-indigo-400" />
-          <h3 className="text-xl font-bold text-white">Plan New Interaction</h3>
-        </div>
-
-        {/* SITUATION TYPE SELECTION */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-indigo-300 mb-3">
-            What type of situation? *
-          </label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {SITUATION_TYPES.map((type) => (
-              <button
-                key={type.id}
-                id={`situation-type-${type.id}`}  // ADD THIS LINE
-                onClick={() => setNewActivityType(type.name)}
-                className={`p-4 rounded-xl border-2 transition-all text-left ${
-                  newActivityType === type.name
-                    ? `bg-${type.color}-600/30 border-${type.color}-500 shadow-lg`
-                    : 'bg-indigo-950/40 border-indigo-700/30 hover:border-indigo-600/50'
-                }`}
-              >
-                <div className="text-3xl mb-2">{type.icon}</div>
-                <p className="text-sm font-semibold text-white">{type.name}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ACTIVITY NAME */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-indigo-300 mb-2">
-            What specifically? *
-          </label>
-          <input
-            type="text"
-            value={newActivityName}
-            onChange={(e) => setNewActivityName(e.target.value)}
-            placeholder="e.g., Doctor appointment for persistent cough"
-            className="w-full px-4 py-3 bg-indigo-950/50 border-2 border-indigo-500/30 rounded-xl text-white placeholder-indigo-400 focus:outline-none focus:border-indigo-400"
-          />
-        </div>
-
-        {/* DATE & TIME */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-indigo-300 mb-2">Date *</label>
-            <input
-  type="date"
-  value={newActivityDate}
-  onChange={(e) => setNewActivityDate(e.target.value)}
-  min={new Date().toISOString().split('T')[0]}
-  className="w-full px-4 py-3 bg-purple-950/50 border-2 border-purple-500/30 rounded-xl text-white focus:outline-none focus:border-purple-400"
-/>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-indigo-300 mb-2">Time *</label>
-            <input
-              type="time"
-              value={newActivityTime}
-              onChange={(e) => setNewActivityTime(e.target.value)}
-              className="w-full px-4 py-3 bg-indigo-950/50 border-2 border-indigo-500/30 rounded-xl text-white focus:outline-none focus:border-indigo-400"
-            />
-          </div>
-        </div>
-
-        {/* DIFFICULTY RATING */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-indigo-300 mb-2">
-            How difficult does this feel? {getAnxietyEmoji(preAnxiety)}
-          </label>
-          <div className="flex items-center gap-3 mb-2">
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={preAnxiety}
-              onChange={(e) => setPreAnxiety(parseInt(e.target.value))}
-              className="flex-1"
-            />
-            <span className={`text-2xl font-bold ${getAnxietyColor(preAnxiety)}`}>
-              {preAnxiety}/10
-            </span>
-          </div>
-          <div className="flex justify-between text-xs text-indigo-400">
-            <span>😊 Easy</span>
-            <span>😐 Moderate</span>
-            <span>😰 Very Difficult</span>
-          </div>
-        </div>
-
-        {/* WHY */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-indigo-300 mb-2">
-            Why are you doing this?
-          </label>
-          <textarea
-            value={newActivityWhy}
-            onChange={(e) => setNewActivityWhy(e.target.value)}
-            placeholder="e.g., Need to address health concerns, can't keep avoiding this"
-            rows={2}
-            className="w-full px-4 py-3 bg-indigo-950/50 border-2 border-indigo-500/30 rounded-xl text-white placeholder-indigo-400 focus:outline-none focus:border-indigo-400 resize-none"
-          />
-        </div>
-
-        {/* ACTION BUTTONS */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={createNewActivity}
-            id="schedule-interaction-btn"
-            className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-bold transition-all shadow-xl flex items-center justify-center gap-2"
-          >
-            <CheckCircle className="w-5 h-5" />
-            Schedule It
-          </button>
-          
-          <button
-            onClick={() => {
-              if (newActivityType) {
-                const situationType = SITUATION_TYPES.find(t => t.name === newActivityType);
-                if (situationType) {
-                  setShowInteractionPlanner(false);
-                  setShowPrepKit(situationType.id);
-                }
-              } else {
-                showNotification('Please select a situation type first');
-              }
-            }}
-            id="prep-kit-btn"
-            className="px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 rounded-xl font-bold transition-all shadow-xl flex items-center justify-center gap-2"
-          >
-            <Target className="w-5 h-5" />
-            View Prep Kit
-          </button>
-        </div>
-      </div>
-
-      {/* QUICK ACCESS TOOLS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <button
-          onClick={() => {
-            setShowInteractionPlanner(false);
-            setShowBreathing(true);
-          }}
-          className="p-4 bg-blue-800/40 hover:bg-blue-800/60 rounded-xl border border-blue-500/30 transition-all text-center"
-        >
-          <Wind className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-          <p className="text-xs font-semibold text-blue-300">Breathing</p>
-        </button>
-
-        <button
-          onClick={() => {
-            setShowInteractionPlanner(false);
-            setShowReframing(true);
-          }}
-          className="p-4 bg-purple-800/40 hover:bg-purple-800/60 rounded-xl border border-purple-500/30 transition-all text-center"
-        >
-          <Brain className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-          <p className="text-xs font-semibold text-purple-300">Reframe</p>
-        </button>
-
-        <button
-          onClick={() => {
-            setShowInteractionPlanner(false);
-            setShowDiscovery(true);
-          }}
-          className="p-4 bg-pink-800/40 hover:bg-pink-800/60 rounded-xl border border-pink-500/30 transition-all text-center"
-        >
-          <Search className="w-6 h-6 text-pink-400 mx-auto mb-2" />
-          <p className="text-xs font-semibold text-pink-300">Discover</p>
-        </button>
-
-        <button
-          onClick={() => {
-            const randomQuote = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
-            showNotification(randomQuote);
-          }}
-          className="p-4 bg-yellow-800/40 hover:bg-yellow-800/60 rounded-xl border border-yellow-500/30 transition-all text-center"
-        >
-          <Sparkles className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
-          <p className="text-xs font-semibold text-yellow-300">Motivate Me</p>
-        </button>
-      </div>
-
-    </div>
-  </div>
-)}
 
 {/* PREP KIT MODAL */}
-{showPrepKit && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div className="bg-gradient-to-br from-indigo-900/95 to-blue-900/95 backdrop-blur-xl p-6 rounded-3xl border-2 border-indigo-500/50 shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-      
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl">
-            {SITUATION_TYPES.find(t => t.id === showPrepKit)?.icon && (
-              <span className="text-2xl">{SITUATION_TYPES.find(t => t.id === showPrepKit).icon}</span>
-            )}
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">
-              {SITUATION_TYPES.find(t => t.id === showPrepKit)?.name} Prep Kit
-            </h2>
-            <p className="text-sm text-indigo-300">Everything you need to prepare</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => setShowPrepKit(null)} 
-          className="p-2 hover:bg-indigo-800/50 rounded-lg transition-colors"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
 
-      {/* PREP KIT CONTENT */}
-      {PREP_KITS[showPrepKit] ? (
-        <div className="space-y-5">
-          
-          {/* SECTIONS */}
-          {PREP_KITS[showPrepKit].sections.map((section, idx) => (
-            <div 
-              key={idx}
-              className="bg-indigo-950/50 rounded-2xl border-2 border-indigo-700/30 p-5"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-indigo-600/30 rounded-xl flex items-center justify-center">
-                  <CheckSquare className="w-5 h-5 text-indigo-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">{section.title}</h3>
-              </div>
-
-              <div className="space-y-3">
-                {section.items.map((item, itemIdx) => (
-                  <div 
-                    key={itemIdx}
-                    className="flex items-start gap-3 p-3 bg-indigo-900/30 rounded-xl hover:bg-indigo-900/50 transition-colors"
-                  >
-                    <div className="w-6 h-6 bg-indigo-600/40 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-indigo-200">{itemIdx + 1}</span>
-                    </div>
-                    <p className="text-indigo-100 text-sm flex-1 leading-relaxed">{item}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* VISUALIZATION EXERCISE */}
-          <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-2xl border-2 border-purple-500/30 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-purple-600/30 rounded-xl flex items-center justify-center">
-                <Brain className="w-5 h-5 text-purple-400" />
-              </div>
-              <h3 className="text-xl font-bold text-white">Visualization Exercise</h3>
-            </div>
-
-            <div className="space-y-3">
-              <div className="p-4 bg-purple-950/40 rounded-xl">
-                <p className="text-purple-200 text-sm leading-relaxed mb-3">
-                  Close your eyes and imagine yourself going through this situation successfully:
-                </p>
-                <ul className="space-y-2 text-sm text-purple-300">
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400">•</span>
-                    <span>Picture yourself arriving calm and prepared</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400">•</span>
-                    <span>See yourself handling it with confidence</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400">•</span>
-                    <span>Imagine the relief you'll feel when it's done</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-400">•</span>
-                    <span>Visualize yourself proud of facing this fear</span>
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                onClick={() => {
-                  setShowPrepKit(null);
-                  setShowBreathing(true);
-                }}
-                className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
-              >
-                <Wind className="w-5 h-5" />
-                Do Breathing Exercise
-              </button>
-            </div>
-          </div>
-
-          {/* WHAT TO EXPECT */}
-          <div className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 rounded-2xl border-2 border-blue-500/30 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-blue-600/30 rounded-xl flex items-center justify-center">
-                <Activity className="w-5 h-5 text-blue-400" />
-              </div>
-              <h3 className="text-xl font-bold text-white">What to Expect</h3>
-            </div>
-
-            <div className="space-y-3">
-              <div className="p-3 bg-blue-950/40 rounded-xl">
-                <p className="text-sm text-blue-200 mb-2">
-                  <strong className="text-blue-100">Your anxiety will likely be highest BEFORE</strong>, not during
-                </p>
-                <p className="text-xs text-blue-300">
-                  The anticipation is almost always worse than the reality
-                </p>
-              </div>
-
-              <div className="p-3 bg-blue-950/40 rounded-xl">
-                <p className="text-sm text-blue-200 mb-2">
-                  <strong className="text-blue-100">It's okay if you're not perfect</strong>
-                </p>
-                <p className="text-xs text-blue-300">
-                  The goal is to show up, not to be flawless
-                </p>
-              </div>
-
-              <div className="p-3 bg-blue-950/40 rounded-xl">
-                <p className="text-sm text-blue-200 mb-2">
-                  <strong className="text-blue-100">You can leave or take breaks</strong>
-                </p>
-                <p className="text-xs text-blue-300">
-                  You're in control and can adjust as needed
-                </p>
-              </div>
-
-              <div className="p-3 bg-blue-950/40 rounded-xl">
-                <p className="text-sm text-blue-200 mb-2">
-                  <strong className="text-blue-100">Most people won't notice your anxiety</strong>
-                </p>
-                <p className="text-xs text-blue-300">
-                  Internal feelings don't show externally as much as you think
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* PRACTICAL TIPS */}
-          {showPrepKit === 'medical' && (
-            <div className="bg-gradient-to-br from-red-900/50 to-orange-900/50 rounded-2xl border-2 border-red-500/30 p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-red-600/30 rounded-xl flex items-center justify-center">
-                  <Heart className="w-5 h-5 text-red-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Medical Appointment Tips</h3>
-              </div>
-
-              <div className="space-y-2 text-sm text-red-200">
-                <p className="flex items-start gap-2">
-                  <span className="text-red-400 font-bold">✓</span>
-                  <span>Bring a list of medications you're currently taking</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-red-400 font-bold">✓</span>
-                  <span>Write down your top 3 concerns beforehand</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-red-400 font-bold">✓</span>
-                  <span>It's okay to bring someone with you for support</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-red-400 font-bold">✓</span>
-                  <span>Take notes during the appointment (or ask if you can record)</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-red-400 font-bold">✓</span>
-                  <span>Request copies of test results for your records</span>
-                </p>
-              </div>
-            </div>
-          )}
-
-          {showPrepKit === 'social' && (
-            <div className="bg-gradient-to-br from-pink-900/50 to-purple-900/50 rounded-2xl border-2 border-pink-500/30 p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-pink-600/30 rounded-xl flex items-center justify-center">
-                  <Users className="w-5 h-5 text-pink-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Social Event Tips</h3>
-              </div>
-
-              <div className="space-y-2 text-sm text-pink-200">
-                <p className="flex items-start gap-2">
-                  <span className="text-pink-400 font-bold">✓</span>
-                  <span>Arrive slightly after start time (not first, not last)</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-pink-400 font-bold">✓</span>
-                  <span>Set a minimum time (like 30 mins) then you can leave guilt-free</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-pink-400 font-bold">✓</span>
-                  <span>Have a friend you can text during bathroom breaks</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-pink-400 font-bold">✓</span>
-                  <span>Offer to help the host - gives you something to do</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-pink-400 font-bold">✓</span>
-                  <span>Remember: Most people are also nervous about socializing</span>
-                </p>
-              </div>
-            </div>
-          )}
-
-          {showPrepKit === 'work' && (
-            <div className="bg-gradient-to-br from-blue-900/50 to-indigo-900/50 rounded-2xl border-2 border-blue-500/30 p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-blue-600/30 rounded-xl flex items-center justify-center">
-                  <Target className="w-5 h-5 text-blue-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Work/School Tips</h3>
-              </div>
-
-              <div className="space-y-2 text-sm text-blue-200">
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-400 font-bold">✓</span>
-                  <span>Prepare key points in writing beforehand</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-400 font-bold">✓</span>
-                  <span>Practice saying your main point out loud first</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-400 font-bold">✓</span>
-                  <span>It's professional to say "Let me think about that"</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-400 font-bold">✓</span>
-                  <span>Follow up in writing to confirm what was discussed</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-400 font-bold">✓</span>
-                  <span>Remember: Advocating for yourself is expected, not rude</span>
-                </p>
-              </div>
-            </div>
-          )}
-
-          {showPrepKit === 'public' && (
-            <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 rounded-2xl border-2 border-green-500/30 p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-green-600/30 rounded-xl flex items-center justify-center">
-                  <Activity className="w-5 h-5 text-green-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Public Place Tips</h3>
-              </div>
-
-              <div className="space-y-2 text-sm text-green-200">
-                <p className="flex items-start gap-2">
-                  <span className="text-green-400 font-bold">✓</span>
-                  <span>Go during off-peak hours your first few times</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-green-400 font-bold">✓</span>
-                  <span>Look up the layout online so you know where things are</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-green-400 font-bold">✓</span>
-                  <span>Headphones are socially acceptable almost everywhere</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-green-400 font-bold">✓</span>
-                  <span>Set a timer for just 15-20 minutes - that's enough!</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-green-400 font-bold">✓</span>
-                  <span>People are genuinely not watching or judging you</span>
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* GROUNDING TECHNIQUES */}
-          <div className="bg-gradient-to-br from-cyan-900/50 to-blue-900/50 rounded-2xl border-2 border-cyan-500/30 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-cyan-600/30 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-cyan-400" />
-              </div>
-              <h3 className="text-xl font-bold text-white">If You Get Overwhelmed During</h3>
-            </div>
-
-            <div className="space-y-3">
-              {GROUNDING_TECHNIQUES.map((technique, idx) => (
-                <div key={idx} className="p-4 bg-cyan-950/40 rounded-xl">
-                  <p className="font-bold text-cyan-100 mb-2 flex items-center gap-2">
-                    <span className="text-cyan-400">→</span>
-                    {technique.name}
-                  </p>
-                  <div className="space-y-1">
-                    {technique.steps.map((step, stepIdx) => (
-                      <p key={stepIdx} className="text-xs text-cyan-300 pl-4">
-                        {step}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ACTION BUTTONS */}
-          <div className="grid grid-cols-2 gap-3 pt-4">
-            <button
-              onClick={() => {
-                setShowPrepKit(null);
-                setShowInteractionPlanner(true);
-              }}
-              className="px-6 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <ArrowRight className="w-5 h-5 rotate-180" />
-              Back to Planner
-            </button>
-
-            <button
-              onClick={() => {
-                setShowPrepKit(null);
-                showNotification('You\'re prepared! Remember: the anticipation is worse than reality 💪');
-              }}
-              className="px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl font-bold transition-all shadow-xl flex items-center justify-center gap-2"
-            >
-              <CheckCircle className="w-5 h-5" />
-              I'm Ready!
-            </button>
-          </div>
-
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <p className="text-indigo-300">No prep kit available for this situation type yet.</p>
-        </div>
-      )}
-
-    </div>
-  </div>
-)}
 
 
 {/* EXPOSURE HIERARCHY MODAL */}
-{showExposureHierarchy && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div className="bg-gradient-to-br from-purple-900/95 to-indigo-900/95 backdrop-blur-xl p-6 rounded-3xl border-2 border-purple-500/50 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-      
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-xl">
-            <TrendingUp className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">My Exposure Hierarchy</h2>
-            <p className="text-sm text-purple-300">Your fear ladder - ranked by difficulty</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => setShowExposureHierarchy(false)} 
-          className="p-2 hover:bg-purple-800/50 rounded-lg transition-colors"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
 
-      {/* EXPLANATION */}
-      <div className="bg-purple-950/50 rounded-2xl border-2 border-purple-700/30 p-5 mb-6">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-purple-600/30 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Sparkles className="w-5 h-5 text-purple-400" />
-          </div>
-          <div>
-            <h3 className="font-bold text-white mb-2">How This Works</h3>
-            <p className="text-sm text-purple-200 mb-3">
-              An exposure hierarchy helps you gradually face fears by starting with easier situations and building up to harder ones. Rate each situation by difficulty, then tackle them in order.
-            </p>
-            <div className="flex items-center gap-2 text-xs text-purple-300">
-              <Target className="w-4 h-4" />
-              <span>Start with steps rated 3-5 for best results</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ADD NEW STEP SECTION */}
-      <div className="bg-gradient-to-br from-indigo-950/80 to-purple-950/80 rounded-2xl border-2 border-indigo-500/30 p-5 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Plus className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-lg font-bold text-white">Add New Step</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-indigo-300 mb-2">
-              Describe the situation
-            </label>
-            <input
-              type="text"
-              placeholder="e.g., Make eye contact with cashier"
-              className="w-full px-4 py-3 bg-indigo-950/50 border-2 border-indigo-500/30 rounded-xl text-white placeholder-indigo-400 focus:outline-none focus:border-indigo-400"
-              id="hierarchy-description"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-indigo-300 mb-2">
-              Difficulty Level (1 = easiest, 10 = hardest)
-            </label>
-            <div className="flex items-center gap-3 mb-2">
-              <input
-                type="range"
-                min="1"
-                max="10"
-                defaultValue="5"
-                className="flex-1"
-                id="hierarchy-difficulty"
-              />
-              <span className="text-2xl font-bold text-indigo-300 min-w-[60px]" id="difficulty-display">5/10</span>
-            </div>
-            <div className="flex justify-between text-xs text-indigo-400">
-              <span>😊 Easy</span>
-              <span>😐 Moderate</span>
-              <span>😰 Very Hard</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => {
-              const description = document.getElementById('hierarchy-description').value;
-              const difficulty = parseInt(document.getElementById('hierarchy-difficulty').value);
-              
-              if (!description.trim()) {
-                showNotification('Please describe the situation');
-                return;
-              }
-
-              const newStep = {
-                id: Date.now().toString(),
-                description: description.trim(),
-                difficulty: difficulty,
-                status: 'pending', // pending, in-progress, completed
-                dateAdded: Date.now(),
-                completedDate: null,
-                attempts: 0,
-                notes: []
-              };
-
-              const updatedHierarchy = [...exposureHierarchy, newStep].sort((a, b) => a.difficulty - b.difficulty);
-              setExposureHierarchy(updatedHierarchy);
-              saveExposureHierarchyToFirebase(updatedHierarchy);
-
-              // Clear inputs
-              document.getElementById('hierarchy-description').value = '';
-              document.getElementById('hierarchy-difficulty').value = '5';
-              document.getElementById('difficulty-display').textContent = '5/10';
-
-              showNotification('✨ Step added to your hierarchy!');
-            }}
-            className="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Add to Hierarchy
-          </button>
-        </div>
-      </div>
-
-      {/* THE LADDER - VISUAL HIERARCHY */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <Activity className="w-5 h-5 text-purple-400" />
-            Your Fear Ladder
-          </h3>
-          <div className="text-sm text-purple-300">
-            {exposureHierarchy.filter(s => s.status === 'completed').length} / {exposureHierarchy.length} completed
-          </div>
-        </div>
-
-        {exposureHierarchy.length === 0 ? (
-          <div className="text-center py-12 bg-purple-950/30 rounded-2xl border-2 border-purple-700/30">
-            <TrendingUp className="w-16 h-16 text-purple-400 mx-auto mb-4 opacity-50" />
-            <p className="text-purple-300 mb-2">Your hierarchy is empty</p>
-            <p className="text-sm text-purple-400">Add your first step above to get started!</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {exposureHierarchy
-              .sort((a, b) => b.difficulty - a.difficulty) // Hardest at top (like a ladder)
-              .map((step, index) => {
-                const isCurrentStep = step.status === 'in-progress';
-                const isCompleted = step.status === 'completed';
-                const isPending = step.status === 'pending';
-                const position = exposureHierarchy.length - index; // Position on ladder
-
-                return (
-                  <div
-                    key={step.id}
-                    className={`relative p-5 rounded-2xl border-2 transition-all ${
-                      isCurrentStep
-                        ? 'bg-gradient-to-br from-yellow-900/50 to-orange-900/50 border-yellow-500/50 shadow-xl'
-                        : isCompleted
-                        ? 'bg-gradient-to-br from-green-900/30 to-emerald-900/30 border-green-500/30 opacity-75'
-                        : 'bg-purple-950/40 border-purple-700/30 hover:border-purple-600/50'
-                    }`}
-                  >
-                    {/* STEP NUMBER BADGE */}
-                    <div className={`absolute -left-3 -top-3 w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg shadow-xl ${
-                      isCurrentStep
-                        ? 'bg-gradient-to-br from-yellow-500 to-orange-600 text-white'
-                        : isCompleted
-                        ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white'
-                        : 'bg-gradient-to-br from-purple-600 to-pink-600 text-white'
-                    }`}>
-                      {isCompleted ? '✓' : position}
-                    </div>
-
-                    <div className="flex items-start gap-4 ml-6">
-                      {/* MAIN CONTENT */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <h4 className="text-lg font-bold text-white flex-1">{step.description}</h4>
-                          
-                          {/* DIFFICULTY INDICATOR */}
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-1">
-                              {[...Array(10)].map((_, i) => (
-                                <div
-                                  key={i}
-                                  className={`w-2 h-6 rounded-full ${
-                                    i < step.difficulty
-                                      ? step.difficulty <= 3
-                                        ? 'bg-green-500'
-                                        : step.difficulty <= 6
-                                        ? 'bg-yellow-500'
-                                        : 'bg-red-500'
-                                      : 'bg-purple-900/30'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <span className={`text-sm font-bold ${
-                              step.difficulty <= 3 ? 'text-green-400' :
-                              step.difficulty <= 6 ? 'text-yellow-400' : 'text-red-400'
-                            }`}>
-                              {step.difficulty}/10
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* STATUS & META INFO */}
-                        <div className="flex items-center gap-4 mb-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            {isCompleted && (
-                              <>
-                                <CheckCircle className="w-4 h-4 text-green-400" />
-                                <span className="text-green-300">Completed {new Date(step.completedDate).toLocaleDateString()}</span>
-                              </>
-                            )}
-                            {isCurrentStep && (
-                              <>
-                                <Zap className="w-4 h-4 text-yellow-400" />
-                                <span className="text-yellow-300">Current Step - You got this!</span>
-                              </>
-                            )}
-                            {isPending && (
-                              <>
-                                <Clock className="w-4 h-4 text-purple-400" />
-                                <span className="text-purple-300">Not started yet</span>
-                              </>
-                            )}
-                          </div>
-
-                          {step.attempts > 0 && (
-                            <div className="flex items-center gap-1 text-purple-400">
-                              <Trophy className="w-4 h-4" />
-                              <span>{step.attempts} attempt{step.attempts > 1 ? 's' : ''}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* NOTES */}
-                        {step.notes && step.notes.length > 0 && (
-                          <div className="p-3 bg-purple-900/30 rounded-xl border border-purple-700/30 mb-3">
-                            <p className="text-sm text-purple-200 italic">"{step.notes[step.notes.length - 1]}"</p>
-                          </div>
-                        )}
-
-                        {/* ACTION BUTTONS */}
-                        <div className="flex items-center gap-2">
-                          {!isCompleted && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  const updatedHierarchy = exposureHierarchy.map(s => ({
-                                    ...s,
-                                    status: s.id === step.id ? 'in-progress' : s.status
-                                  }));
-                                  setExposureHierarchy(updatedHierarchy);
-                                  saveExposureHierarchyToFirebase(updatedHierarchy);
-                                  showNotification('🎯 Marked as current step!');
-                                }}
-                                className="px-3 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                              >
-                                <Target className="w-4 h-4" />
-                                {isCurrentStep ? 'Current' : 'Set as Current'}
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  const note = prompt('Add a note about this attempt:');
-                                  if (!note) return;
-
-                                  const updatedHierarchy = exposureHierarchy.map(s => {
-                                    if (s.id === step.id) {
-                                      return {
-                                        ...s,
-                                        attempts: s.attempts + 1,
-                                        notes: [...(s.notes || []), note]
-                                      };
-                                    }
-                                    return s;
-                                  });
-                                  setExposureHierarchy(updatedHierarchy);
-                                  saveExposureHierarchyToFirebase(updatedHierarchy);
-                                  showNotification('📝 Progress noted!');
-                                }}
-                                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                                Add Note
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Mark "${step.description}" as completed?`)) {
-                                    const updatedHierarchy = exposureHierarchy.map(s => {
-                                      if (s.id === step.id) {
-                                        return {
-                                          ...s,
-                                          status: 'completed',
-                                          completedDate: Date.now()
-                                        };
-                                      }
-                                      return s;
-                                    });
-                                    setExposureHierarchy(updatedHierarchy);
-                                    saveExposureHierarchyToFirebase(updatedHierarchy);
-                                    showNotification('🎉 Step completed! You\'re making progress!');
-                                  }
-                                }}
-                                className="px-3 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                                Complete
-                              </button>
-                            </>
-                          )}
-
-                          <button
-                            onClick={() => {
-                              if (confirm(`Delete "${step.description}" from hierarchy?`)) {
-                                const updatedHierarchy = exposureHierarchy.filter(s => s.id !== step.id);
-                                setExposureHierarchy(updatedHierarchy);
-                                saveExposureHierarchyToFirebase(updatedHierarchy);
-                                showNotification('Step removed');
-                              }
-                            }}
-                            className="ml-auto p-2 hover:bg-red-900/50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-400" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        )}
-      </div>
-
-      {/* PROGRESS STATS */}
-      {exposureHierarchy.length > 0 && (
-        <div className="bg-gradient-to-br from-purple-950/50 to-indigo-950/50 rounded-2xl border-2 border-purple-500/30 p-5 mb-6">
-          <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-purple-400" />
-            Your Progress
-          </h3>
-
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-yellow-400">
-                {exposureHierarchy.filter(s => s.status === 'in-progress').length}
-              </p>
-              <p className="text-xs text-purple-300">In Progress</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-green-400">
-                {exposureHierarchy.filter(s => s.status === 'completed').length}
-              </p>
-              <p className="text-xs text-purple-300">Completed</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-purple-400">
-                {exposureHierarchy.filter(s => s.status === 'pending').length}
-              </p>
-              <p className="text-xs text-purple-300">Pending</p>
-            </div>
-          </div>
-
-          {/* PROGRESS BAR */}
-          <div className="h-4 bg-purple-900/50 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-green-500 to-emerald-500"
-              style={{
-                width: `${exposureHierarchy.length > 0 
-                  ? (exposureHierarchy.filter(s => s.status === 'completed').length / exposureHierarchy.length) * 100 
-                  : 0}%`
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* TIPS */}
-      <div className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 rounded-2xl border-2 border-blue-500/30 p-5">
-        <div className="flex items-center gap-3 mb-3">
-          <Sparkles className="w-5 h-5 text-blue-400" />
-          <h3 className="font-bold text-white">Hierarchy Tips</h3>
-        </div>
-        <div className="space-y-2 text-sm text-blue-200">
-          <p className="flex items-start gap-2">
-            <span className="text-blue-400">•</span>
-            <span>Start with steps rated 3-5 for the best success rate</span>
-          </p>
-          <p className="flex items-start gap-2">
-            <span className="text-blue-400">•</span>
-            <span>It's okay to repeat steps multiple times before moving up</span>
-          </p>
-          <p className="flex items-start gap-2">
-            <span className="text-blue-400">•</span>
-            <span>Break down hard steps into smaller sub-steps</span>
-          </p>
-          <p className="flex items-start gap-2">
-            <span className="text-blue-400">•</span>
-            <span>Celebrate each completion - progress is progress!</span>
-          </p>
-        </div>
-      </div>
-
-    </div>
-  </div>
-)}
 
 {/* ADD LIVE SLIDER UPDATE SCRIPT */}
 <script dangerouslySetInnerHTML={{__html: `
@@ -3137,6 +3110,18 @@ I Feel Better Now
           <p className="text-sm font-bold text-white">Breathing</p>
           <p className="text-xs text-blue-300">Calm down now</p>
         </button>
+
+        <button
+  onClick={() => {
+    document.getElementById('action-planner-section')?.scrollIntoView({ behavior: 'smooth' });
+    setPlannerTab('plan');
+  }}
+  className="p-5 bg-gradient-to-br from-indigo-800/60 to-purple-900/60 hover:from-indigo-700/60 hover:to-purple-800/60 rounded-2xl border-2 border-indigo-500/30 transition-all shadow-xl hover:shadow-2xl"
+>
+  <Calendar className="w-8 h-8 text-indigo-400 mb-2" />
+  <h3 className="font-bold text-white mb-1">Action Planner</h3>
+  <p className="text-sm text-indigo-300">Plan + prep for situations</p>
+</button>
 
         {/* GROUNDING */}
         <button
@@ -3354,51 +3339,328 @@ Complete Check-In
 )}
 
 {/* ONBOARDING OVERLAY */}
-{showOnboarding && activities.length === 0 && !active && (
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-<div className="bg-gradient-to-br from-purple-900/95 to-indigo-900/95 backdrop-blur-xl p-8 rounded-3xl border-2 border-purple-500/50 shadow-2xl max-w-md w-full animate-scale-in">
-<div className="text-center mb-6">
-<div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
-<Heart className="w-8 h-8 text-white" />
-</div>
-<h2 className="text-3xl font-bold text-white mb-2">Welcome! 🎉</h2>
-<p className="text-purple-200">Your journey to facing fears starts here</p>
-</div>
-
-<div className="space-y-4 mb-6">
-<div className="flex items-start gap-3 p-4 bg-purple-950/50 rounded-xl border border-purple-500/30">
-<Target className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
-<div>
-<h3 className="font-bold text-white text-sm mb-1">Schedule Activities</h3>
-<p className="text-purple-300 text-xs">Plan activities you're nervous about</p>
-</div>
-</div>
-
-<div className="flex items-start gap-3 p-4 bg-purple-950/50 rounded-xl border border-purple-500/30">
-<Wind className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-<div>
-<h3 className="font-bold text-white text-sm mb-1">Calm Your Nerves</h3>
-<p className="text-purple-300 text-xs">Use breathing exercises before activities</p>
-</div>
-</div>
-
-<div className="flex items-start gap-3 p-4 bg-purple-950/50 rounded-xl border border-purple-500/30">
-<TrendingUp className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-<div>
-<h3 className="font-bold text-white text-sm mb-1">Track Progress</h3>
-<p className="text-purple-300 text-xs">Watch your anxiety decrease over time</p>
-</div>
-</div>
-</div>
-
-<button
-onClick={() => setShowOnboarding(false)}
-className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-xl font-bold text-white transition-all shadow-xl"
->
-Let's Get Started! 🚀
-</button>
-</div>
-</div>
+{showOnboarding && !onboardingComplete && !active && (
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+    style={{ background: 'rgba(10,6,25,0.85)', backdropFilter: 'blur(12px)' }}>
+ 
+    <div className="w-full sm:max-w-lg mx-auto"
+      style={{
+        background: 'linear-gradient(160deg, #1a0f3c 0%, #0f172a 60%, #0c1a2e 100%)',
+        borderTop: '1px solid rgba(139,92,246,0.3)',
+        borderLeft: '1px solid rgba(139,92,246,0.15)',
+        borderRight: '1px solid rgba(139,92,246,0.15)',
+        borderRadius: '24px 24px 0 0',
+        padding: '32px 28px 40px',
+      }}
+      className="sm:rounded-3xl sm:border sm:border-purple-500/20">
+ 
+      {/* Progress dots */}
+      <div className="flex items-center justify-center gap-2 mb-8">
+        {[1, 2, 3].map(s => (
+          <div key={s} style={{
+            width: s === onboardingStep ? '24px' : '8px',
+            height: '8px',
+            borderRadius: '4px',
+            background: s === onboardingStep
+              ? 'linear-gradient(90deg, #a78bfa, #ec4899)'
+              : s < onboardingStep
+              ? 'rgba(167,139,250,0.5)'
+              : 'rgba(255,255,255,0.1)',
+            transition: 'all 0.3s ease',
+          }} />
+        ))}
+      </div>
+ 
+      {/* ── STEP 1: Welcome ── */}
+      {onboardingStep === 1 && (
+        <div style={{ animation: 'fadeSlideUp 0.4s ease' }}>
+          <div style={{
+            width: '56px', height: '56px',
+            background: 'linear-gradient(135deg, #7c3aed, #db2777)',
+            borderRadius: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: '20px',
+            boxShadow: '0 0 32px rgba(124,58,237,0.4)',
+          }}>
+            <span style={{ fontSize: '24px' }}>💜</span>
+          </div>
+ 
+          <h2 style={{
+            fontSize: '28px', fontWeight: '700', color: '#f3f0ff',
+            marginBottom: '10px', lineHeight: '1.2',
+          }}>
+            Welcome, {user?.displayName?.split(' ')[0] || 'there'}
+          </h2>
+          <p style={{ color: 'rgba(196,181,253,0.8)', fontSize: '15px', lineHeight: '1.6', marginBottom: '28px' }}>
+            This app helps you face situations that make you anxious — step by step,
+            at your own pace. No pressure. Just progress.
+          </p>
+ 
+          <p style={{ color: 'rgba(196,181,253,0.6)', fontSize: '13px', marginBottom: '14px', fontWeight: '500', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            What brings you here?
+          </p>
+ 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[
+              { id: 'social',  emoji: '👥', label: 'Social anxiety',          sub: 'Events, conversations, new people' },
+              { id: 'medical', emoji: '🏥', label: 'Medical or work situations', sub: 'Appointments, calls, difficult conversations' },
+              { id: 'general', emoji: '🎯', label: 'General fear-facing',      sub: 'Avoiding things I know I should do' },
+            ].map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setUserGoal(opt.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '14px',
+                  padding: '14px 16px',
+                  borderRadius: '14px',
+                  border: userGoal === opt.id
+                    ? '1.5px solid rgba(167,139,250,0.8)'
+                    : '1px solid rgba(255,255,255,0.08)',
+                  background: userGoal === opt.id
+                    ? 'rgba(124,58,237,0.2)'
+                    : 'rgba(255,255,255,0.04)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'left',
+                  width: '100%',
+                }}
+              >
+                <span style={{ fontSize: '22px', flexShrink: 0 }}>{opt.emoji}</span>
+                <div>
+                  <p style={{ color: '#f3f0ff', fontWeight: '600', fontSize: '14px', margin: 0 }}>{opt.label}</p>
+                  <p style={{ color: 'rgba(196,181,253,0.6)', fontSize: '12px', margin: 0, marginTop: '2px' }}>{opt.sub}</p>
+                </div>
+                {userGoal === opt.id && (
+                  <div style={{ marginLeft: 'auto', width: '20px', height: '20px', borderRadius: '50%', background: 'linear-gradient(135deg,#a78bfa,#ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+ 
+          <button
+            onClick={() => {
+              if (!userGoal) { showNotification('Pick one to continue 👆'); return; }
+              setOnboardingStep(2);
+            }}
+            style={{
+              width: '100%', marginTop: '24px',
+              padding: '15px',
+              background: userGoal
+                ? 'linear-gradient(135deg, #7c3aed, #db2777)'
+                : 'rgba(255,255,255,0.06)',
+              borderRadius: '14px', border: 'none',
+              color: userGoal ? '#fff' : 'rgba(255,255,255,0.3)',
+              fontWeight: '700', fontSize: '15px',
+              cursor: userGoal ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s ease',
+              boxShadow: userGoal ? '0 4px 24px rgba(124,58,237,0.4)' : 'none',
+            }}
+          >
+            Continue →
+          </button>
+        </div>
+      )}
+ 
+      {/* ── STEP 2: Baseline anxiety ── */}
+      {onboardingStep === 2 && (
+        <div style={{ animation: 'fadeSlideUp 0.4s ease' }}>
+          <div style={{
+            width: '56px', height: '56px',
+            background: 'linear-gradient(135deg, #0891b2, #6366f1)',
+            borderRadius: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: '20px',
+          }}>
+            <span style={{ fontSize: '24px' }}>📊</span>
+          </div>
+ 
+          <h2 style={{ fontSize: '26px', fontWeight: '700', color: '#f3f0ff', marginBottom: '10px' }}>
+            Where are you starting?
+          </h2>
+          <p style={{ color: 'rgba(196,181,253,0.7)', fontSize: '15px', lineHeight: '1.6', marginBottom: '28px' }}>
+            On a typical day, how much does anxiety affect you in situations you avoid?
+            This is your personal baseline — we'll watch it drop.
+          </p>
+ 
+          {/* Big anxiety display */}
+          <div style={{
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: '20px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            padding: '28px 24px',
+            marginBottom: '20px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '8px' }}>
+              {baselineAnxiety <= 3 ? '😌' : baselineAnxiety <= 6 ? '😰' : '😱'}
+            </div>
+            <div style={{
+              fontSize: '48px', fontWeight: '800',
+              background: baselineAnxiety <= 3
+                ? 'linear-gradient(135deg,#4ade80,#22d3ee)'
+                : baselineAnxiety <= 6
+                ? 'linear-gradient(135deg,#facc15,#fb923c)'
+                : 'linear-gradient(135deg,#f87171,#ec4899)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              marginBottom: '4px',
+            }}>
+              {baselineAnxiety}<span style={{ fontSize: '24px', opacity: 0.5 }}>/10</span>
+            </div>
+            <p style={{ color: 'rgba(196,181,253,0.6)', fontSize: '13px' }}>
+              {baselineAnxiety <= 3 ? 'Low — mild nerves in some situations'
+                : baselineAnxiety <= 6 ? 'Moderate — anxiety regularly holds you back'
+                : 'High — anxiety stops you often'}
+            </p>
+          </div>
+ 
+          <input
+            type="range" min="1" max="10" value={baselineAnxiety}
+            onChange={e => setBaselineAnxiety(parseInt(e.target.value))}
+            style={{ width: '100%', marginBottom: '28px' }}
+          />
+ 
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setOnboardingStep(1)}
+              style={{
+                flex: 1, padding: '14px',
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)',
+                color: 'rgba(196,181,253,0.7)', fontWeight: '600', fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => setOnboardingStep(3)}
+              style={{
+                flex: 2, padding: '14px',
+                background: 'linear-gradient(135deg, #0891b2, #6366f1)',
+                borderRadius: '14px', border: 'none',
+                color: '#fff', fontWeight: '700', fontSize: '15px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 20px rgba(6,182,212,0.3)',
+              }}
+            >
+              That's me →
+            </button>
+          </div>
+        </div>
+      )}
+ 
+      {/* ── STEP 3: Your ladder preview ── */}
+      {onboardingStep === 3 && (
+        <div style={{ animation: 'fadeSlideUp 0.4s ease' }}>
+          <div style={{
+            width: '56px', height: '56px',
+            background: 'linear-gradient(135deg, #059669, #0891b2)',
+            borderRadius: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: '20px',
+          }}>
+            <span style={{ fontSize: '24px' }}>🪜</span>
+          </div>
+ 
+          <h2 style={{ fontSize: '26px', fontWeight: '700', color: '#f3f0ff', marginBottom: '10px' }}>
+            Your fear ladder is ready
+          </h2>
+          <p style={{ color: 'rgba(196,181,253,0.7)', fontSize: '15px', lineHeight: '1.6', marginBottom: '20px' }}>
+            We've built you a starter ladder based on your goal. 
+            You'll tackle these step by step — always starting with the easiest.
+          </p>
+ 
+          {/* Preview of starter steps */}
+          <div style={{
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: '16px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            overflow: 'hidden',
+            marginBottom: '24px',
+          }}>
+            {({
+              social: [
+                { d: 'Make eye contact and smile at a stranger', diff: 2 },
+                { d: 'Say hello to someone new at an event', diff: 4 },
+                { d: 'Attend a group class or activity alone', diff: 6 },
+                { d: 'Introduce yourself and keep a conversation going', diff: 8 },
+              ],
+              medical: [
+                { d: 'Look up a doctor or clinic online without calling', diff: 2 },
+                { d: 'Call to book an appointment', diff: 4 },
+                { d: 'Attend the appointment and answer basic questions', diff: 6 },
+                { d: 'Ask the doctor a question you prepared in advance', diff: 8 },
+              ],
+              general: [
+                { d: 'Identify one situation you\'ve been avoiding', diff: 2 },
+                { d: 'Go somewhere slightly outside your comfort zone', diff: 4 },
+                { d: 'Stay until anxiety drops naturally', diff: 6 },
+                { d: 'Face your biggest avoided situation with a plan', diff: 8 },
+              ],
+            }[userGoal] || []).map((step, i, arr) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: '12px',
+                padding: '12px 16px',
+                borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+              }}>
+                <div style={{
+                  width: '28px', height: '28px', flexShrink: 0,
+                  borderRadius: '8px',
+                  background: step.diff <= 3
+                    ? 'rgba(74,222,128,0.15)' : step.diff <= 6
+                    ? 'rgba(250,204,21,0.15)' : 'rgba(248,113,113,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '12px', fontWeight: '700',
+                  color: step.diff <= 3 ? '#4ade80' : step.diff <= 6 ? '#facc15' : '#f87171',
+                }}>
+                  {step.diff}
+                </div>
+                <p style={{
+                  color: 'rgba(243,240,255,0.85)', fontSize: '13px',
+                  margin: 0, lineHeight: '1.4',
+                }}>
+                  {step.d}
+                </p>
+              </div>
+            ))}
+          </div>
+ 
+          <p style={{
+            color: 'rgba(196,181,253,0.5)', fontSize: '12px',
+            textAlign: 'center', marginBottom: '20px',
+          }}>
+            You can add, edit, or remove steps anytime in the Action Planner
+          </p>
+ 
+          <button
+            onClick={async () => {
+              // Save profile + seed hierarchy + mark onboarding done
+              await saveUserProfile({ goal: userGoal, baselineAnxiety, completedAt: Date.now() });
+              await seedStarterHierarchy(userGoal);
+              localStorage.setItem('onboardingComplete', 'true');
+              setOnboardingComplete(true);
+              setShowOnboarding(false);
+              showNotification("🎉 Your ladder is ready. Let's start climbing!");
+            }}
+            style={{
+              width: '100%', padding: '16px',
+              background: 'linear-gradient(135deg, #059669, #0891b2)',
+              borderRadius: '14px', border: 'none',
+              color: '#fff', fontWeight: '700', fontSize: '16px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 28px rgba(5,150,105,0.4)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            Let's start climbing 🪜
+          </button>
+        </div>
+      )}
+ 
+    </div>
+  </div>
 )}
 
 {/* NOTIFICATION */}
@@ -3450,6 +3712,11 @@ animation: fade-in 0.2s ease-out;
 
 .animate-scale-in {
 animation: scale-in 0.3s ease-out;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 html {
