@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
-import { createUserWithEmailAndPassword, signInWithRedirect, GoogleAuthProvider, getAuth, getRedirectResult } from "firebase/auth";import { doc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, GoogleAuthProvider, getAuth } from "firebase/auth";
+import { doc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { firestore } from "@/sections/creategoal/ConversationFlow";
 import { logEvent } from "firebase/analytics";
 import { analytics } from "@/lib/firebase";
@@ -33,7 +34,16 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
+
+
 type SignupFormData = z.infer<typeof signupSchema>;
+
+
+const signinSchema = z.object({
+  email: z.string().email("Invalid email"),
+  password: z.string().min(1, "Password is required"),
+});
+type SigninFormData = z.infer<typeof signinSchema>;
 
 const detailedFeatures = [
   {
@@ -84,6 +94,143 @@ interface SignupFormProps {
   onSignupSuccess?: () => void;
 }
 
+function SignInModal({ onClose }: { onClose: () => void }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const authInstance = getAuth();
+
+  const form = useForm<SigninFormData>({
+    resolver: zodResolver(signinSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const handleEmailSignIn = async (data: SigninFormData) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await signInWithEmailAndPassword(authInstance, data.email, data.password);
+      navigate('/dashboard', { replace: true });
+    } catch (err: any) {
+      const msgs: Record<string, string> = {
+        "auth/user-not-found": "No account found with this email.",
+        "auth/wrong-password": "Wrong password. Try again.",
+        "auth/invalid-credential": "Wrong email or password.",
+        "auth/too-many-requests": "Too many attempts. Try again later.",
+        "auth/network-request-failed": "Network issue. Check your connection.",
+      };
+      setError(msgs[err.code] || "Sign in failed. Try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    setError(null);
+    try {
+      const result = await FirebaseAuthentication.signInWithGoogle({ scopes: ['email', 'profile'] });
+      const idToken = result.credential?.idToken;
+      if (!idToken) throw new Error("No ID token");
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(authInstance, credential);
+      navigate('/dashboard', { replace: true });
+    } catch (err: any) {
+      setError(`Google sign-in failed: ${err.message}`);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
+      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        className="bg-slate-900 border border-white/10 rounded-2xl p-8 w-full max-w-md shadow-2xl"
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white">Welcome back 👋</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors text-xl leading-none">✕</button>
+        </div>
+
+        {error && (
+          <motion.div
+            className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-5 flex items-start gap-2"
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          >
+            <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
+            <p className="text-red-200 text-sm">{error}</p>
+          </motion.div>
+        )}
+
+        <Button
+          onClick={handleGoogleSignIn}
+          disabled={isGoogleLoading || isLoading}
+          className="w-full bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3 rounded-xl mb-5 text-base"
+        >
+          {isGoogleLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</> : "Continue with Google"}
+        </Button>
+
+        <div className="relative mb-5">
+          <div className="w-full border-t border-white/20"></div>
+          <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 bg-slate-900 px-3 text-slate-400 text-xs">or email</div>
+        </div>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleEmailSignIn)} className="space-y-4">
+            <FormField control={form.control} name="email" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white text-sm font-medium">Email</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="you@example.com"
+                    className="bg-white/10 border-white/20 text-white placeholder:text-slate-400 rounded-xl px-4 py-3 focus:border-blue-500"
+                    disabled={isLoading || isGoogleLoading} />
+                </FormControl>
+                <FormMessage className="text-red-300" />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="password" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white text-sm font-medium">Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input {...field} type={showPassword ? "text" : "password"} placeholder="••••••••"
+                      className="bg-white/10 border-white/20 text-white placeholder:text-slate-400 rounded-xl px-4 py-3 pr-12 focus:border-blue-500"
+                      disabled={isLoading || isGoogleLoading} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage className="text-red-300" />
+              </FormItem>
+            )} />
+
+            <Button type="submit" disabled={isLoading || isGoogleLoading}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 rounded-xl mt-2">
+              {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</> : "Sign In"}
+            </Button>
+          </form>
+        </Form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export function SignupForm({ onSignupSuccess }: SignupFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -93,11 +240,12 @@ export function SignupForm({ onSignupSuccess }: SignupFormProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
   const [featureStep, setFeatureStep] = useState(0);
+  const [showSignIn, setShowSignIn] = useState(false);
 
 
    const [userName, setUserName] = useState("");
    const [planGenerated, setPlanGenerated] = useState(false);
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<any[]>([]);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [localLoading, setLocalLoading] = useState(false);
@@ -653,7 +801,15 @@ const handleFirstStepsComplete = () => {
 
   // Main signup form
   return (
+
+    
     <div className="max-w-md mx-auto w-full">
+
+
+    <AnimatePresence>
+      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
+    </AnimatePresence>
+
       <motion.div 
         className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl"
         initial={{ opacity: 0, y: 20 }} 
@@ -814,11 +970,15 @@ const handleFirstStepsComplete = () => {
         </Form>
 
         <p className="text-center text-slate-400 text-sm mt-6">
-          Already have an account?{" "}
-          <a href="/sign-in" className="text-blue-400 hover:text-blue-300 font-semibold transition-colors">
-            Sign in
-          </a>
-        </p>
+  Already have an account?{" "}
+  <button
+    type="button"
+    onClick={() => setShowSignIn(true)}
+    className="text-blue-400 hover:text-blue-300 font-semibold transition-colors underline underline-offset-2"
+  >
+    Sign in
+  </button>
+</p>
       </motion.div>
     </div>
   );

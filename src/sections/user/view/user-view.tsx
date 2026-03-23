@@ -1420,8 +1420,27 @@ return (
 </div>
 </div>
 </header>
-<main className="flex items-center justify-center px-6 lg:px-12 py-12">
-{renderSubpage(selectedLesson, tasks, toggleTask, journalEntry, setJournalEntry, handleNextSubpage, handleCompleteLesson, () => setCurrentView('timeline'), subpageTypes[currentSubpage], loadUserData)}
+<main className="flex items-center justify-center px-4 py-8">
+  <div
+    className="w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 flex flex-col"
+    style={{ background: 'linear-gradient(160deg, #3b1f6e 0%, #1e1150 50%, #2d1a6b 100%)', minHeight: '70vh', maxHeight: '80vh' }}
+  >
+    {/* Inner header */}
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-white/5 shrink-0">
+      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg">
+        <Target className="w-4 h-4 text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-white font-bold text-sm truncate">{selectedLesson.title}</p>
+        <p className="text-purple-300 text-xs">Your AI Coach — Step {currentSubpage + 1}</p>
+      </div>
+      <span className="text-purple-300 text-xs">{subpageTypes.length} steps</span>
+    </div>
+    {/* Scrollable content */}
+    <div className="flex-1 overflow-y-auto">
+      {renderSubpage(selectedLesson, tasks, toggleTask, journalEntry, setJournalEntry, handleNextSubpage, handleCompleteLesson, () => setCurrentView('timeline'), subpageTypes[currentSubpage], loadUserData)}
+    </div>
+  </div>
 </main>
 </motion.div>
 );
@@ -1542,20 +1561,22 @@ function TopicModulesSection({ modules, onSelectLesson }) {
         </p>
       </motion.div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 relative z-[1]">
-        {modules.map((module, index) => (
-          <TopicModuleCard
-            key={module.id}
-            id={index === 0 ? "Lessonplan" : undefined}
-            module={module}
-            index={index}
-            isExpanded={expandedModule === module.id}
-            onToggle={() =>
-              setExpandedModule(expandedModule === module.id ? null : module.id)
-            }
-            onSelectLesson={onSelectLesson}
-          />
-        ))}
+      <div className="w-full max-w-3xl mx-auto max-h-[80vh] overflow-y-auto rounded-2xl bg-slate-900/40 border border-slate-700/40 p-4 relative z-[1]">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {modules.map((module, index) => (
+            <TopicModuleCard
+              key={module.id}
+              id={index === 0 ? "Lessonplan" : undefined}
+              module={module}
+              index={index}
+              isExpanded={expandedModule === module.id}
+              onToggle={() =>
+                setExpandedModule(expandedModule === module.id ? null : module.id)
+              }
+              onSelectLesson={onSelectLesson}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1588,47 +1609,47 @@ function TopicModuleCard({ id, module, index, isExpanded, onToggle, onSelectLess
         {/* Ambient glow behind card */}
         <div className={`absolute -top-10 -right-10 w-40 h-40 bg-gradient-to-br ${module.color} opacity-[0.06] rounded-full blur-2xl pointer-events-none`} />
 
-        <div className="p-6">
+        <div className="p-3">
           {/* Icon + Title row */}
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${module.color} bg-opacity-20 flex items-center justify-center text-2xl shadow-lg shrink-0`}>
+          <div className="flex items-start justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${module.color} bg-opacity-20 flex items-center justify-center text-base shadow shrink-0`}>
                 {module.icon}
               </div>
               <div>
-                <h3 className="text-white font-bold text-base leading-snug">{module.title}</h3>
-                <p className="text-slate-400 text-xs mt-0.5 leading-snug">{module.description}</p>
+                <h3 className="text-white font-bold text-xs leading-snug">{module.title}</h3>
+                <p className="text-slate-400 text-[10px] mt-0.5 leading-snug line-clamp-1">{module.description}</p>
               </div>
             </div>
             <motion.div
               animate={{ rotate: isExpanded ? 180 : 0 }}
               transition={{ duration: 0.2 }}
-              className="shrink-0 mt-1"
+              className="shrink-0 mt-0.5"
             >
-              <ChevronRight className={`w-5 h-5 transition-colors ${isExpanded ? 'text-white' : 'text-slate-500'} rotate-90`} />
+              <ChevronRight className={`w-3.5 h-3.5 transition-colors ${isExpanded ? 'text-white' : 'text-slate-500'} rotate-90`} />
             </motion.div>
           </div>
 
           {/* Stats row */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-1.5 bg-slate-900/60 rounded-lg px-2.5 py-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs text-slate-400 font-medium">{module.lessons.length} lesson{module.lessons.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-900/60 rounded px-1.5 py-1">
+              <BookOpen className="w-2.5 h-2.5 text-slate-400" />
+              <span className="text-[10px] text-slate-400 font-medium">{module.lessons.length}L</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-slate-900/60 rounded-lg px-2.5 py-1.5">
-              <Zap className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="text-xs text-yellow-400 font-medium">+{totalXP} XP</span>
+            <div className="flex items-center gap-1 bg-slate-900/60 rounded px-1.5 py-1">
+              <Zap className="w-2.5 h-2.5 text-yellow-400" />
+              <span className="text-[10px] text-yellow-400 font-medium">+{totalXP}</span>
             </div>
             {completedCount > 0 && (
-              <div className="flex items-center gap-1.5 bg-green-500/10 rounded-lg px-2.5 py-1.5">
-                <CheckCircle className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-xs text-green-400 font-medium">{completedCount}/{module.lessons.length}</span>
+              <div className="flex items-center gap-1 bg-green-500/10 rounded px-1.5 py-1">
+                <CheckCircle className="w-2.5 h-2.5 text-green-400" />
+                <span className="text-[10px] text-green-400 font-medium">{completedCount}/{module.lessons.length}</span>
               </div>
             )}
           </div>
 
           {/* Progress bar */}
-          <div className="h-1 bg-slate-700/60 rounded-full overflow-hidden">
+          <div className="h-0.5 bg-slate-700/60 rounded-full overflow-hidden">
             <motion.div
               className={`h-full bg-gradient-to-r ${module.color} rounded-full`}
               initial={{ width: 0 }}
@@ -1637,7 +1658,7 @@ function TopicModuleCard({ id, module, index, isExpanded, onToggle, onSelectLess
             />
           </div>
           {progress === 0 && (
-            <p className="text-xs text-slate-600 mt-1.5">Not started</p>
+            <p className="text-[10px] text-slate-600 mt-1">Not started</p>
           )}
         </div>
 
@@ -1651,7 +1672,7 @@ function TopicModuleCard({ id, module, index, isExpanded, onToggle, onSelectLess
               transition={{ duration: 0.25, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <div className="px-6 pb-6 space-y-2 border-t border-slate-700/50 pt-4">
+              <div className="px-3 pb-3 space-y-1.5 border-t border-slate-700/50 pt-3">
                 {module.lessons.map((lesson, idx) => {
                   const isLocked = lesson.locked;
                   const isCompleted = lesson.completed;
@@ -1668,7 +1689,7 @@ function TopicModuleCard({ id, module, index, isExpanded, onToggle, onSelectLess
                         if (!isLocked) onSelectLesson(lesson, index);
                       }}
                       disabled={isLocked}
-                      className={`w-full text-left rounded-xl p-3 border transition-all group/lesson
+                      className={`w-full text-left rounded-lg p-2 border transition-all group/lesson
                         ${isCompleted
                           ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/15'
                           : isLocked
@@ -1676,29 +1697,29 @@ function TopicModuleCard({ id, module, index, isExpanded, onToggle, onSelectLess
                           : 'bg-slate-900/60 border-slate-700/40 hover:border-slate-500/60 hover:bg-slate-900/80 cursor-pointer'
                         }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0
                             ${isCompleted ? 'bg-green-500/20' : isLocked ? 'bg-slate-700/50' : `bg-gradient-to-br ${module.color} bg-opacity-30`}`}>
                             {isCompleted
-                              ? <CheckCircle className="w-4 h-4 text-green-400" />
+                              ? <CheckCircle className="w-3 h-3 text-green-400" />
                               : isLocked
-                              ? <Lock className="w-4 h-4 text-slate-500" />
-                              : <Play className="w-4 h-4 text-white" />}
+                              ? <Lock className="w-3 h-3 text-slate-500" />
+                              : <Play className="w-3 h-3 text-white" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className={`text-sm font-semibold truncate ${isCompleted ? 'text-green-300' : isLocked ? 'text-slate-500' : 'text-white'}`}>
+                            <p className={`text-xs font-semibold truncate ${isCompleted ? 'text-green-300' : isLocked ? 'text-slate-500' : 'text-white'}`}>
                               {lesson.title}
                             </p>
-                            <p className="text-xs text-slate-500 line-clamp-2 leading-snug mt-0.5">{lesson.summary}</p>
+                            <p className="text-[10px] text-slate-500 line-clamp-1 leading-snug mt-0.5">{lesson.summary}</p>
                           </div>
                         </div>
-<div className="flex flex-col items-end gap-1 shrink-0">
-                          <div className={`text-xs font-bold px-2 py-0.5 rounded-md
+<div className="flex flex-col items-end gap-0.5 shrink-0">
+                          <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded
                             ${isCompleted ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
                             +{lesson.xp}
                           </div>
-                          <span className="text-xs text-slate-500">{lesson.duration}</span>
+                          <span className="text-[10px] text-slate-500">{lesson.duration}</span>
                         </div>
                       </div>
                     </motion.button>
