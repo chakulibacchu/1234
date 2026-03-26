@@ -62,6 +62,28 @@ const [planPreview, setPlanPreview] = useState<any>(null);
 const userId = auth.currentUser?.uid || "user_trial";
 const messagesEndRef = useRef<HTMLDivElement>(null);
 
+const APP_SLIDES = [
+  {
+    image: new URL('../PHOTOS/01.png', import.meta.url).href,
+    title: "Your missions, waiting",
+    description: "Every morning you get a tiny, doable social challenge — calibrated to exactly where you are in your journey.",
+  },
+  {
+    image: new URL('../PHOTOS/01.png', import.meta.url).href,
+    title: "Watch yourself grow",
+    description: "A visual skill map shows you exactly how far you've come — unlocking new challenges as your confidence builds.",
+  },
+  {
+    image: new URL('../PHOTOS/01.png', import.meta.url).href,
+    title: "Practice before the real thing",
+    description: "Rehearse conversations with our AI coach. Get instant feedback so you walk into every situation ready.",
+  },
+  {
+    image: new URL('../PHOTOS/01.png', import.meta.url).href,
+    title: "Every win celebrated",
+    description: "Streaks, badges, and milestone moments keep you motivated — because small wins compound into big changes.",
+  },
+];
 
 
   function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
