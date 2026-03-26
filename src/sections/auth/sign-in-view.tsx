@@ -23,7 +23,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, doc, setDoc, updateDoc , serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-
+import { startTrial } from "@/lib/trialTimer";
 
 // FIREBASE CONFIG (YOUR ORIGINAL)
 const firebaseConfig = {
@@ -38,6 +38,8 @@ measurementId: "G-BJQMLK9JJ1",
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 export const firestore = getFirestore(app);
 
+
+
 const SignInView = () => {
   // CRITICAL FIX: Move useNavigate to top level of component
   const navigate = useNavigate();
@@ -51,7 +53,7 @@ const SignInView = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [localLoading, setLocalLoading] = useState(false);
   const [answers, setAnswers] = useState({}); // or [] depending on type
-
+  const [showAppPreview, setShowAppPreview] = useState(false);
 const [successfulDays, setSuccessfulDays] = useState(0);
 const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 const [planPreview, setPlanPreview] = useState<any>(null);
@@ -59,6 +61,166 @@ const [planPreview, setPlanPreview] = useState<any>(null);
   const auth = getAuth();
 const userId = auth.currentUser?.uid || "user_trial";
 const messagesEndRef = useRef<HTMLDivElement>(null);
+
+
+
+  function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
+    const [current, setCurrent] = useState(0);
+  
+    const goTo = (idx: number) =>
+      setCurrent(Math.max(0, Math.min(idx, APP_SLIDES.length - 1)));
+  
+    const handleDragEnd = (_: any, info: any) => {
+      if (info.offset.x < -50) goTo(current + 1);
+      else if (info.offset.x > 50) goTo(current - 1);
+    };
+  
+    const slide = APP_SLIDES[current];
+    const isLast = current === APP_SLIDES.length - 1;
+  
+    return (
+      <motion.div
+        className="fixed inset-0 z-[9998] flex flex-col items-center justify-center px-5 overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #0f0a1e 0%, #1a0a2e 50%, #0d1a3a 100%)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.35 }}
+      >
+        <motion.div
+          className="mb-6 text-center"
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-400/30 rounded-full px-4 py-1.5 mb-3">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-purple-200 text-xs font-semibold tracking-widest uppercase">
+              Closed Beta — Limited Spots
+            </span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-white leading-tight">
+            Here's what's inside
+            <br />
+            <span className="bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+              the app
+            </span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-2">
+            Swipe to explore — your plan is already waiting in here
+          </p>
+        </motion.div>
+  
+        <div className="relative flex items-center justify-center w-full max-w-xs mb-5 select-none">
+          <div className="absolute inset-0 blur-3xl opacity-25 bg-gradient-to-b from-purple-600 to-blue-600 rounded-full scale-75 pointer-events-none" />
+  
+          {current > 0 && (
+            <button
+              onClick={() => goTo(current - 1)}
+              className="absolute -left-3 z-20 w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            >
+              ‹
+            </button>
+          )}
+  
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={current}
+              className="relative z-10"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.15}
+              onDragEnd={handleDragEnd}
+              initial={{ opacity: 0, x: 55, scale: 0.94 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -55, scale: 0.94 }}
+              transition={{ duration: 0.28, ease: "easeOut" }}
+            >
+              <div className="relative w-[200px] h-[400px] bg-slate-900 rounded-[2.5rem] border-[5px] border-slate-700 shadow-2xl overflow-hidden ring-2 ring-white/10">
+                <div className="absolute top-0 left-0 right-0 h-7 bg-black/60 z-10 flex items-center justify-center">
+                  <div className="w-16 h-3.5 bg-slate-800 rounded-full" />
+                </div>
+                <img
+                  src={slide.image}
+                  alt={slide.title}
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-16 h-1 bg-white/30 rounded-full" />
+              </div>
+            </motion.div>
+          </AnimatePresence>
+  
+          {current < APP_SLIDES.length - 1 && (
+            <button
+              onClick={() => goTo(current + 1)}
+              className="absolute -right-3 z-20 w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            >
+              ›
+            </button>
+          )}
+        </div>
+  
+        <div className="flex gap-2 mb-5">
+          {APP_SLIDES.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goTo(i)}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === current ? "bg-purple-400 w-6" : "bg-white/20 w-2"
+              }`}
+            />
+          ))}
+        </div>
+  
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={current + "-text"}
+            className="text-center max-w-xs mb-7 px-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+          >
+            <h3 className="text-white font-bold text-xl mb-1.5">{slide.title}</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">{slide.description}</p>
+          </motion.div>
+        </AnimatePresence>
+  
+        <motion.div
+          className="w-full max-w-xs text-center"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          {isLast ? (
+            <>
+              <p className="text-slate-500 text-xs mb-3">
+                🔒 Closed beta — grab your spot before it fills up
+              </p>
+              <button
+                onClick={onContinue}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
+              >
+                Join Closed Beta →
+              </button>
+              <p className="text-slate-600 text-xs mt-3">
+                Your plan is already saved — don't lose access to it
+              </p>
+            </>
+          ) : (
+            <button
+              onClick={() => goTo(current + 1)}
+              className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white font-semibold text-sm hover:bg-white/15 transition-colors"
+            >
+              Next →
+            </button>
+          )}
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   // Quiz questions
   const quizQuestions = [
@@ -1188,106 +1350,31 @@ setTimeout(() => setToast(null), 3500);
         </div>
       </div>
 
+
+       {/* App Preview Screen */}
+            <AnimatePresence>
+              {showAppPreview && (
+                <AppPreviewScreen
+                  onContinue={() => {
+                    startTrial();
+                    setShowAppPreview(false);
+                    setShowAppDownload(true);
+                  }}
+                />
+              )}
+            </AnimatePresence>
+      
+
+
       {/* App Download Full-Screen Overlay */}
       <AnimatePresence>
-        {showAppDownload && (
-          <motion.div
-            className="fixed inset-0 z-[9999] flex flex-col items-center justify-center px-6"
-            style={{ background: "linear-gradient(135deg, #0f0a1e 0%, #1a0a2e 40%, #0d1a3a 100%)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <motion.div
-              className="relative w-full max-w-sm text-center"
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-            >
-              {/* App icon */}
-              <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-pink-500 via-purple-600 to-blue-600 flex items-center justify-center shadow-2xl shadow-purple-500/50 ring-4 ring-white/10">
-                <span className="text-5xl">📱</span>
-              </div>
-
-              {/* Live badge */}
-              <div className="inline-flex items-center gap-1.5 bg-purple-500/20 border border-purple-400/30 rounded-full px-3 py-1 mb-4">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-purple-200 text-xs font-semibold tracking-wide uppercase">Now Available on Android</span>
-              </div>
-
-              {/* Headline */}
-              <h2 className="text-4xl font-extrabold text-white mb-3 leading-tight">
-                Your journey is better<br />
-                <span className="bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
-                  in your pocket.
-                </span>
-              </h2>
-
-              <p className="text-slate-300 text-base leading-relaxed mb-5">
-                You've just unlocked your personalised plan, {userName}. Don't let it sit on a browser tab — keep it with you every single day.
-              </p>
-
-              {/* Selling points */}
-              <div className="space-y-2.5 mb-8 text-left">
-                {[
-                  { emoji: "🔔", text: "Daily mission reminders so you never miss a day" },
-                  { emoji: "⚡", text: "Faster, smoother experience built for mobile" },
-                  { emoji: "🔒", text: "Progress, streaks & data — all synced instantly" },
-                  { emoji: "🌙", text: "Works offline, so you can practice anywhere" },
-                ].map((item, i) => (
-                  <motion.div
-                    key={i}
-                    className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + i * 0.08 }}
-                  >
-                    <span className="text-xl flex-shrink-0">{item.emoji}</span>
-                    <span className="text-slate-200 text-sm">{item.text}</span>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Google Play CTA */}
-              <motion.a
-                href="https://play.google.com/store/apps/details?id=app.connect.mobile"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-3 w-full px-5 py-4 bg-white text-gray-900 font-bold text-base rounded-2xl shadow-2xl hover:scale-[1.03] active:scale-[0.98] transition-transform duration-200 mb-3"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-              >
-                <svg className="w-7 h-7" viewBox="0 0 512 512">
-                  <path fill="#4CAF50" d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1z"/>
-                  <path fill="#FF3D00" d="M47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.1-256L47 0z"/>
-                  <path fill="#FFD600" d="M401.4 233.7l-87.8-50.4-66.7 64.7 66.7 64.7 89.2-51.1c12.8-7.4 12.8-20.6-1.4-28z"/>
-                  <path fill="#FF3D00" d="M104.6 499l280.8-161.2-60.1-60.1L104.6 499z"/>
-                </svg>
-                <div className="text-left">
-                  <div className="text-[10px] text-gray-500 leading-none">Get it on</div>
-                  <div className="text-base font-extrabold leading-tight">Google Play</div>
-                </div>
-              </motion.a>
-
-              <p className="text-slate-500 text-xs mb-8">🍎 iOS App Store coming soon</p>
-
-              {/* No thanks — small, understated */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAppDownload(false);
-                  console.log("Navigating to main app...");
-                  navigate('/dashboard');
-                }}
-                className="text-slate-600 hover:text-slate-400 text-sm transition-colors underline underline-offset-4"
-              >
-                No thanks, continue in browser
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
+        <AppPreviewScreen
+                  onContinue={() => {
+                    startTrial();
+                    setShowAppPreview(false);
+                    setShowAppDownload(true);
+                  }}
+                />
       </AnimatePresence>
       </React.Fragment>
     );
