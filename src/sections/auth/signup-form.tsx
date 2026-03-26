@@ -803,9 +803,7 @@ const handleFirstStepsComplete = () => {
             <p className="text-green-200 text-xl">Let's start leveling up your social skills</p>
           </div>
 
-          <button onClick={() => setShowAppPreview(true)}>
-  TEST: Open Preview
-</button>
+          
 
           {/* Feature walkthrough */}
           <AnimatePresence mode="wait">
@@ -831,6 +829,9 @@ const handleFirstStepsComplete = () => {
                     <p className="text-slate-300 text-lg mb-4">
                       {detailedFeatures[featureStep].description}
                     </p>
+                    <button onClick={() => setShowAppPreview(true)}>
+  TEST: Open Preview
+</button>
                     <div className="flex flex-wrap gap-2">
                       {detailedFeatures[featureStep].benefits.map((b, i) => (
                         <span key={i} className="bg-blue-500/20 px-3 py-1.5 rounded-full text-blue-200 text-sm flex items-center gap-1">
