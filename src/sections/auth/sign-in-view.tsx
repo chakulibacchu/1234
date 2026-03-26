@@ -227,6 +227,11 @@ const APP_SLIDES = [
               >
                 Join Closed Beta →
               </button>
+
+              <button onClick={() => {startTrial();}}>
+                TEST: Open Preview
+              </button>
+
               <p className="text-slate-600 text-xs mt-3">
                 Your plan is already saved — don't lose access to it
               </p>
