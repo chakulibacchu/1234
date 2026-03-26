@@ -803,6 +803,10 @@ const handleFirstStepsComplete = () => {
             <p className="text-green-200 text-xl">Let's start leveling up your social skills</p>
           </div>
 
+          <button onClick={() => setShowAppPreview(true)}>
+  TEST: Open Preview
+</button>
+
           {/* Feature walkthrough */}
           <AnimatePresence mode="wait">
             <motion.div 
