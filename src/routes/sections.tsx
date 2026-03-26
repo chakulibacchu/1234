@@ -2,7 +2,6 @@ import type { RouteObject } from 'react-router';
 import { lazy, Suspense } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { DashboardLayout } from 'src/layouts/dashboard';
-// omnipresent in dashboard only
 
 // ----------------------------------------------------------------------
 // Lazy-loaded pages
@@ -19,6 +18,9 @@ export const ProductsPage = lazy(() => import('src/pages/products'));
 export const ActionGroupFeedPage = lazy(() => import('src/pages/action-group-feed'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
 export const ConnectionsPage = lazy(() => import('src/sections/LiveActionSupport/connectionspage'));
+
+// ✅ NEW ANDROID PAGE
+export const AndroidPage = lazy(() => import('src/pages/android'));
 
 // ----------------------------------------------------------------------
 // Fallback Loader for Lazy Pages
@@ -51,6 +53,18 @@ export const routesSection: RouteObject[] = [
       { path: 'profile', element: <ProfilePage /> },
       { path: 'connections', element: <ConnectionsPage /> },
     ],
+  },
+
+  // ------------------------------
+  // ANDROID PAGE (OUTSIDE DASHBOARD)
+  // ------------------------------
+  {
+    path: 'android',
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <AndroidPage />
+      </Suspense>
+    ),
   },
 
   // ------------------------------

@@ -572,6 +572,11 @@ const submitPhase4 = async (e) => {
       setPhase(data.phase || 5);
       pushBotMessage("Ready for confirmation. Review everything and let me know if it looks good or if you want to change anything.");
     }
+
+    if (data.task_overview) {
+      setTaskOverview(data.task_overview);
+    }
+    
   } catch (err) {
     console.error("❌ Submit error:", err);
     setErrorText(String(err?.message || err));
