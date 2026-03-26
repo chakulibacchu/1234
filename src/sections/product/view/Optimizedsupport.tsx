@@ -52,8 +52,10 @@ const [selectedPostTypes, setSelectedPostTypes] = useState([]);
 const [posts, setPosts] = useState([]);
 // Firebase state
 const [firebaseConnected, setFirebaseConnected] = useState(false);
-
+const [solutionText, setSolutionText] = useState({});
 const [userActivities, setUserActivities] = useState([]);
+const [triedSolutions, setTriedSolutions] = useState({});
+const [helpedSolutions, setHelpedSolutions] = useState({});
 const [allUserActivities, setAllUserActivities] = useState([]);
 
 // UI state
@@ -112,22 +114,23 @@ useEffect(() => {
       const q = query(postsRef, orderBy('timestamp', 'desc'));
       
       // Real-time listener
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const postsData = [];
-        snapshot.forEach((doc) => {
-          postsData.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-        
-        console.log('📊 Posts loaded:', postsData.length);
-        setPosts(postsData);
-        setFirebaseConnected(true);
-      }, (error) => {
-        console.error('❌ Error loading posts:', error);
-        setFirebaseConnected(false);
-      });
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+  const postsData = await Promise.all(snapshot.docs.map(async (postDoc) => {
+    const solutionsSnap = await getDocs(
+      collection(db, 'groups', 'socialAvoidance', 'posts', postDoc.id, 'solutions')
+    );
+    const solutions = solutionsSnap.docs.map(s => ({ id: s.id, ...s.data() }));
+    
+    return {
+      id: postDoc.id,
+      ...postDoc.data(),
+      solutions
+    };
+  }));
+  
+  setPosts(postsData);
+  setFirebaseConnected(true);
+});
       
       // Cleanup listener on unmount
       return () => unsubscribe();
@@ -603,13 +606,15 @@ const handleAddComment = async (postId, text) => {
   setCommentText({ ...commentText, [postId]: '' });
 };
 
-const handleAddSolution = async (postId, solution) => {
-  const db = getDatabase();
-  const solutionsRef = ref(db, `groups/socialAvoidance/posts/${postId}/solutions`);
+const handleAddSolution = async (postId, solutionText) => {
+  if (!solutionText?.trim()) return;
   
-  await push(solutionsRef, {
-    text: solution,
-    from: '👤',
+  const db = getFirestore();
+  const solutionsRef = collection(db, 'groups', 'socialAvoidance', 'posts', postId, 'solutions');
+  
+  await addDoc(solutionsRef, {
+    text: solutionText,
+    from: currentUser?.photoURL || '👤',
     author: currentUser?.uid || 'anonymous',
     timestamp: serverTimestamp(),
     helped: 0,
@@ -617,6 +622,7 @@ const handleAddSolution = async (postId, solution) => {
   });
 
   setShowSolutionInput({ ...showSolutionInput, [postId]: false });
+  setSolutionText({ ...solutionText, [postId]: '' });
 };
 
 const handleCreatePost = async (postType, postData) => {
@@ -903,7 +909,11 @@ className="flex items-center gap-2 text-green-400 font-black text-sm hover:text-
 
 <div className="flex items-center gap-2 md:gap-4 pl-8 md:pl-11 flex-wrap">
 <button
-onClick={() => handleReaction(post.id, `solution-${sol.id}`)}
+  onClick={async () => {
+    const db = getFirestore();
+    const solRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id, 'solutions', sol.id);
+    await updateDoc(solRef, { helped: increment(1) });
+  }}
 className={`flex items-center gap-1.5 px-3 py-1.5 bg-green-900/30 hover:bg-green-900/50
 rounded-lg transition-all group ${reactionAnimations[`${post.id}-solution-${sol.id}`] ? 'scale-110' : ''}`}
 >
@@ -949,26 +959,28 @@ Share what worked for you
 </button>
 ) : (
 <div className="space-y-2 p-3 md:p-4 bg-white/5 rounded-xl">
-<textarea
-placeholder="What worked for you? Be specific..."
-rows={3}
-className="w-full px-3 md:px-4 py-2 md:py-3 bg-slate-900 border border-green-500/30 rounded-lg
-text-white text-sm md:text-base placeholder-purple-500 focus:border-green-500 focus:outline-none resize-none"
-/>
-<div className="flex gap-2">
-<button
-onClick={() => setShowSolutionInput({ ...showSolutionInput, [post.id]: false })}
-className="px-3 md:px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm"
->
-Cancel
-</button>
-<button
-onClick={() => handleAddSolution(post.id, 'solution text')}
-className="flex-1 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold text-sm"
->
-Share Solution
-</button>
-</div>
+  <textarea
+    placeholder="What worked for you? Be specific..."
+    value={solutionText[post.id] || ''}
+    onChange={(e) => setSolutionText({ ...solutionText, [post.id]: e.target.value })}
+    rows={3}
+    className="w-full px-3 md:px-4 py-2 md:py-3 bg-slate-900 border border-green-500/30 rounded-lg
+    text-white text-sm md:text-base placeholder-purple-500 focus:border-green-500 focus:outline-none resize-none"
+  />
+  <div className="flex gap-2">
+    <button
+      onClick={() => setShowSolutionInput({ ...showSolutionInput, [post.id]: false })}
+      className="px-3 md:px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm"
+    >
+      Cancel
+    </button>
+    <button
+      onClick={() => handleAddSolution(post.id, solutionText[post.id])}
+      className="flex-1 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold text-sm"
+    >
+      Share Solution
+    </button>
+  </div>
 </div>
 )}
 </div>
@@ -1012,6 +1024,68 @@ className="hover:text-pink-400 flex items-center gap-1"
 ))}
 </div>
 )}
+
+
+<div className="flex items-center gap-2 flex-wrap pl-4 md:pl-6">
+  <button
+    data-tour="relate-button"
+    onClick={handleRelateClick}
+    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+      ${hasReacted.relate
+        ? 'bg-purple-600 text-white'
+        : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-400'}`}
+  >
+    <Heart className="w-3 h-3" />
+    I relate · {localReactions?.relate || 0}
+  </button>
+
+  <button
+    data-tour="cheer-button"
+    onClick={async () => {
+      const db = getFirestore();
+      const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+      await updateDoc(postRef, { 'reactions.cheering': increment(1) });
+    }}
+    className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg text-yellow-400 text-xs font-bold transition-all"
+  >
+    <Star className="w-3 h-3" />
+    Cheer · {post.reactions?.cheering || 0}
+  </button>
+
+  <button
+    data-tour="send-support-button"
+    onClick={async () => {
+      if (!currentUser) return;
+      const db = getFirestore();
+      await addDoc(collection(db, 'supportMessages'), {
+        toUid: post.author?.uid,
+        fromUid: currentUser.uid,
+        fromName: currentUser.displayName || 'Anonymous',
+        postId: post.id,
+        message: `${currentUser.displayName || 'Someone'} sent you support on your post.`,
+        timestamp: serverTimestamp(),
+        read: false,
+      });
+      alert('Support sent! 💜');
+    }}
+    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg text-blue-400 text-xs font-bold transition-all"
+  >
+    <Send className="w-3 h-3" />
+    Send support
+  </button>
+
+  <button
+    onClick={handleFollowClick}
+    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+      ${hasReacted.following
+        ? 'bg-green-600 text-white'
+        : 'bg-green-500/10 hover:bg-green-500/20 text-green-400'}`}
+  >
+    <Bell className="w-3 h-3" />
+    {hasReacted.following ? 'Following' : 'Follow'} · {localReactions?.following || 0}
+  </button>
+</div>
+
 </div>
 )}
 
@@ -1141,217 +1215,391 @@ Share
 
 // ============================================ // JOURNEY TRACKER CARD (Similar interactive enhancements) // ============================================
 
-const JourneyTrackerCard = ({ post }) => { const [localReactions, setLocalReactions] = useState(post.reactions); const [hasReacted, setHasReacted] = useState({});
+const JourneyTrackerCard = ({ post }) => {
+  const [localReactions, setLocalReactions] = useState(post.reactions);
+  const [hasReacted, setHasReacted] = useState({});
+  const [copySuccess, setCopySuccess] = useState(false);
 
- 
-return (
-<div className="rounded-2xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5
-backdrop-blur-sm p-4 md:p-6 space-y-4 relative">
-{/* Similar header and interactive elements as StruggleSolutionCard */}
-<div className="flex items-start justify-between gap-2">
-<div className="flex items-center gap-2 md:gap-3">
-<div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-purple-600 flex items-center justify-center text-lg md:text-xl">
-{post.author.avatar}
-</div>
-<div>
-<div className="flex items-center gap-2">
-<span className="text-white font-bold text-sm md:text-base">Anonymous</span>
-<span className="px-2 py-0.5 bg-purple-500 text-white text-xs rounded-full font-bold">
-JOURNEY
-</span>
-</div>
-<span className="text-purple-400 text-xs">{post.timeAgo} • {post.timeline}</span>
-</div>
-</div>
-<button
-onClick={() => setShowMoreMenu({ ...showMoreMenu, [post.id]: !showMoreMenu[post.id] })}
-className="p-2 hover:bg-white/5 rounded-lg transition-all"
->
-<MoreHorizontal className="w-5 h-5 text-purple-400" />
-</button>
-</div>
+  const handleCheer = async () => {
+    if (hasReacted.cheering) return;
+    const db = getFirestore();
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+    await updateDoc(postRef, {
+      'reactions.cheering': increment(1)
+    });
+    setLocalReactions(prev => ({ ...prev, cheering: prev.cheering + 1 }));
+    setHasReacted(prev => ({ ...prev, cheering: true }));
+  };
 
-<h3 className="text-white text-lg md:text-xl font-bold">{post.title}</h3>
+  const handleRelate = async () => {
+    const db = getFirestore();
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+    const delta = hasReacted.relate ? -1 : 1;
+    await updateDoc(postRef, {
+      'reactions.relate': increment(delta)
+    });
+    setLocalReactions(prev => ({ ...prev, relate: prev.relate + delta }));
+    setHasReacted(prev => ({ ...prev, relate: !prev.relate }));
+  };
 
-{/* Timeline */}
-<div className="space-y-4">
-<div className="relative pl-6 md:pl-8 border-l-4 border-red-500/30">
-<div className="absolute -left-[11px] md:-left-[13px] top-0 w-5 h-5 md:w-6 md:h-6 rounded-full bg-red-500 flex items-center justify-center">
-<span className="text-white text-xs font-bold">1</span>
-</div>
-<div className="text-red-400 font-black text-xs mb-1.5 tracking-wider">BEFORE</div>
-<p className="text-purple-200 text-sm md:text-base">{post.before}</p>
-</div>
+  const handleFollow = async () => {
+    const db = getFirestore();
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+    const delta = hasReacted.following ? -1 : 1;
+    await updateDoc(postRef, {
+      'reactions.following': increment(delta)
+    });
+    setLocalReactions(prev => ({ ...prev, following: prev.following + delta }));
+    setHasReacted(prev => ({ ...prev, following: !prev.following }));
+  };
 
-<div className="relative pl-6 md:pl-8 border-l-4 border-yellow-500">
-<div className="absolute -left-[11px] md:-left-[13px] top-0 w-5 h-5 md:w-6 md:h-6 rounded-full bg-yellow-500 flex items-center justify-center">
-<Flame className="w-3 h-3 md:w-4 md:h-4 text-white" />
-</div>
-<div className="text-yellow-400 font-black text-xs mb-1.5 tracking-wider">TODAY</div>
-<p className="text-white font-semibold text-base md:text-lg">{post.today}</p>
-</div>
+  const handleShare = async () => {
+    const shareText = `Journey: ${post.title}\n\nBefore: ${post.before}\n\nToday: ${post.today}\n\nGoal: ${post.goal}`;
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = shareText;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
 
-<div className="relative pl-6 md:pl-8 border-l-4 border-green-500/30 border-dashed">
-<div className="absolute -left-[11px] md:-left-[13px] top-0 w-5 h-5 md:w-6 md:h-6 rounded-full bg-green-500/20 border-4 border-green-500"></div>
-<div className="text-green-400 font-black text-xs mb-1.5 tracking-wider">GOAL</div>
-<p className="text-purple-200 font-medium text-sm md:text-base">{post.goal}</p>
-</div>
-</div>
+  return (
+    <div className="rounded-2xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5
+    backdrop-blur-sm p-4 md:p-6 space-y-4 relative">
 
-{/* Progress Updates */}
-{post.updates.length > 0 && (
-<div className="pt-4 border-t-2 border-white/5 space-y-2">
-<div className="text-blue-400 font-bold text-sm flex items-center gap-2">
-<Calendar className="w-4 h-4" />
-PROGRESS UPDATES
-</div>
-{post.updates.map((update, idx) => (
-<div key={idx} className="p-3 bg-white/5 rounded-lg border border-white/10">
-<div className="flex items-center gap-2 mb-1">
-<CheckCircle className="w-4 h-4 text-green-400" />
-<span className="text-white font-bold text-sm">Day {update.day}</span>
-</div>
-<p className="text-purple-200 text-sm pl-6">{update.note}</p>
-</div>
-))}
-</div>
-)}
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-purple-600 flex items-center justify-center text-lg md:text-xl">
+            {post.author.avatar}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-white font-bold text-sm md:text-base">Anonymous</span>
+              <span className="px-2 py-0.5 bg-purple-500 text-white text-xs rounded-full font-bold">
+                JOURNEY
+              </span>
+            </div>
+            <span className="text-purple-400 text-xs">{post.timeAgo} • {post.timeline}</span>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowMoreMenu({ ...showMoreMenu, [post.id]: !showMoreMenu[post.id] })}
+          className="p-2 hover:bg-white/5 rounded-lg transition-all"
+        >
+          <MoreHorizontal className="w-5 h-5 text-purple-400" />
+        </button>
+      </div>
 
-{/* Cheer Button */}
-<button className="w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500
-hover:to-emerald-500 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2">
-<Flame className="w-5 h-5" />
-Cheer them on! 🎉
-</button>
+      <h3 className="text-white text-lg md:text-xl font-bold">{post.title}</h3>
 
-{/* Reactions */}
-<div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
-<button
-onClick={() => {
-handleReaction(post.id, 'relate');
-setLocalReactions({ ...localReactions, relate: localReactions.relate + (hasReacted.relate ? -1 : 1) });
-setHasReacted({ ...hasReacted, relate: !hasReacted.relate });
-}}
-className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${hasReacted.relate ? 'bg-pink-500/20' : 'bg-pink-500/10'}
-hover:bg-pink-500/20 border border-pink-500/30 rounded-lg transition-all`}
->
-<Heart className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.relate ? 'fill-pink-400' : ''} text-pink-400`} />
-<span className="text-pink-400 font-bold text-sm">{localReactions.relate}</span>
-</button>
+      {/* Timeline */}
+      <div className="space-y-4">
+        <div className="relative pl-6 md:pl-8 border-l-4 border-red-500/30">
+          <div className="absolute -left-[11px] md:-left-[13px] top-0 w-5 h-5 md:w-6 md:h-6 rounded-full bg-red-500 flex items-center justify-center">
+            <span className="text-white text-xs font-bold">1</span>
+          </div>
+          <div className="text-red-400 font-black text-xs mb-1.5 tracking-wider">BEFORE</div>
+          <p className="text-purple-200 text-sm md:text-base">{post.before}</p>
+        </div>
 
-<button className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-green-500/10 hover:bg-green-500/20
-border border-green-500/30 rounded-lg transition-all">
-<Flame className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
-<span className="text-green-400 font-bold text-sm">{localReactions.cheering}</span>
-<span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Cheering</span>
-</button>
+        <div className="relative pl-6 md:pl-8 border-l-4 border-yellow-500">
+          <div className="absolute -left-[11px] md:-left-[13px] top-0 w-5 h-5 md:w-6 md:h-6 rounded-full bg-yellow-500 flex items-center justify-center">
+            <Flame className="w-3 h-3 md:w-4 md:h-4 text-white" />
+          </div>
+          <div className="text-yellow-400 font-black text-xs mb-1.5 tracking-wider">TODAY</div>
+          <p className="text-white font-semibold text-base md:text-lg">{post.today}</p>
+        </div>
 
-<button className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20
-border border-blue-500/30 rounded-lg transition-all">
-<Eye className="w-3 h-3 md:w-4 md:h-4 text-blue-400" />
-<span className="text-blue-400 font-bold text-sm">{localReactions.following}</span>
-</button>
-</div>
-</div>
-);
+        <div className="relative pl-6 md:pl-8 border-l-4 border-green-500/30 border-dashed">
+          <div className="absolute -left-[11px] md:-left-[13px] top-0 w-5 h-5 md:w-6 md:h-6 rounded-full bg-green-500/20 border-4 border-green-500"></div>
+          <div className="text-green-400 font-black text-xs mb-1.5 tracking-wider">GOAL</div>
+          <p className="text-purple-200 font-medium text-sm md:text-base">{post.goal}</p>
+        </div>
+      </div>
+
+      {/* Progress Updates */}
+      {post.updates && post.updates.length > 0 && (
+        <div className="pt-4 border-t-2 border-white/5 space-y-2">
+          <div className="text-blue-400 font-bold text-sm flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            PROGRESS UPDATES
+          </div>
+          {post.updates.map((update, idx) => (
+            <div key={idx} className="p-3 bg-white/5 rounded-lg border border-white/10">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-white font-bold text-sm">Day {update.day}</span>
+              </div>
+              <p className="text-purple-200 text-sm pl-6">{update.note}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Cheer Button */}
+      <button
+        onClick={handleCheer}
+        disabled={hasReacted.cheering}
+        className={`w-full px-4 py-3 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2 ${
+          hasReacted.cheering
+            ? 'bg-green-700 cursor-not-allowed'
+            : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500'
+        }`}
+      >
+        <Flame className="w-5 h-5" />
+        {hasReacted.cheering ? 'Cheered! 🎉' : 'Cheer them on! 🎉'}
+      </button>
+
+      {/* Reactions Row */}
+      <div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
+        
+        {/* Relate */}
+        <button
+          onClick={handleRelate}
+          className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
+            hasReacted.relate ? 'bg-pink-500/20' : 'bg-pink-500/10'
+          } hover:bg-pink-500/20 border border-pink-500/30 rounded-lg transition-all`}
+        >
+          <Heart className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.relate ? 'fill-pink-400' : ''} text-pink-400`} />
+          <span className="text-pink-400 font-bold text-sm">{localReactions.relate}</span>
+          <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Relate</span>
+        </button>
+
+        {/* Cheering count */}
+        <button
+          onClick={handleCheer}
+          disabled={hasReacted.cheering}
+          className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
+            hasReacted.cheering ? 'bg-green-500/30' : 'bg-green-500/10'
+          } hover:bg-green-500/20 border border-green-500/30 rounded-lg transition-all`}
+        >
+          <Flame className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.cheering ? 'fill-green-400' : ''} text-green-400`} />
+          <span className="text-green-400 font-bold text-sm">{localReactions.cheering}</span>
+          <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Cheering</span>
+        </button>
+
+        {/* Following */}
+        <button
+          onClick={handleFollow}
+          className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
+            hasReacted.following ? 'bg-blue-500/30' : 'bg-blue-500/10'
+          } hover:bg-blue-500/20 border border-blue-500/30 rounded-lg transition-all`}
+        >
+          <Eye className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.following ? 'fill-blue-400' : ''} text-blue-400`} />
+          <span className="text-blue-400 font-bold text-sm">{localReactions.following}</span>
+          <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">
+            {hasReacted.following ? 'Following' : 'Follow'}
+          </span>
+        </button>
+
+        {/* Share */}
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20
+          border border-purple-500/30 rounded-lg transition-all ml-auto"
+        >
+          {copySuccess ? (
+            <>
+              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
+              <span className="text-green-400 text-xs md:text-sm">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
+              <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Share</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // ============================================ // WHAT WORKED CARD // ============================================
 
-const WhatWorkedCard = ({ post }) => { const [localReactions, setLocalReactions] = useState(post.reactions); const [hasReacted, setHasReacted] = useState({});
+const WhatWorkedCard = ({ post }) => {
+  const [localReactions, setLocalReactions] = useState(post.reactions);
+  const [hasReacted, setHasReacted] = useState({});
+  const [hasTried, setHasTried] = useState(false);
+  const [localTrying, setLocalTrying] = useState(post.reactions?.trying || 0);
+  const [copySuccess, setCopySuccess] = useState(false);
 
- 
-return (
-<div className="rounded-2xl border-2 border-green-500/30 bg-gradient-to-br from-green-500/5 to-emerald-500/5
-backdrop-blur-sm p-4 md:p-6 space-y-4">
-<div className="flex items-start justify-between gap-2">
-<div className="flex items-center gap-2 md:gap-3">
-<div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-green-600 flex items-center justify-center text-lg md:text-xl">
-{post.author.avatar}
-</div>
-<div>
-<div className="flex items-center gap-2">
-<span className="text-white font-bold text-sm md:text-base">Anonymous</span>
-<span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-bold flex items-center gap-1">
-<Lightbulb className="w-3 h-3" />
-SOLUTION
-</span>
-</div>
-<span className="text-purple-400 text-xs">{post.timeAgo}</span>
-</div>
-</div>
-{post.verified && (
-<div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 border border-blue-500/50 rounded-full">
-<CheckCircle className="w-3 h-3 text-blue-400" />
-<span className="text-blue-400 text-xs font-bold"></span>
-</div>
-)}
-</div>
+  const handleTryThis = async () => {
+    if (hasTried) return;
+    const db = getFirestore();
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+    await updateDoc(postRef, {
+      'reactions.trying': increment(1)
+    });
+    setLocalTrying(prev => prev + 1);
+    setHasTried(true);
+  };
 
-<div className="space-y-4">
-<div>
-<div className="text-red-400 font-black text-xs mb-2 tracking-wider">THE PROBLEM</div>
-<p className="text-purple-200 font-medium text-sm md:text-base pl-4">{post.problem}</p>
-</div>
+  const handleHelped = async () => {
+    if (hasReacted.helped) return;
+    const db = getFirestore();
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+    await updateDoc(postRef, {
+      'reactions.helped': increment(1)
+    });
+    setLocalReactions(prev => ({ ...prev, helped: prev.helped + 1 }));
+    setHasReacted(prev => ({ ...prev, helped: true }));
+  };
 
-<div className="flex items-center justify-center py-2">
-<div className="flex flex-col items-center gap-1">
-<ArrowDown className="w-6 h-6 md:w-8 md:h-8 text-green-400 animate-bounce" />
-<span className="text-green-400 font-bold text-xs">SOLUTION</span>
-</div>
-</div>
+  const handleShare = async () => {
+    const shareText = `Problem: ${post.problem}\n\nSolution: ${post.solution}\n\nImpact: ${post.impact}`;
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      // fallback for devices that don't support clipboard
+      const el = document.createElement('textarea');
+      el.value = shareText;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
 
-<div className="p-4 md:p-5 bg-green-500/10 border-2 border-green-500/30 rounded-xl">
-<p className="text-white font-bold text-base md:text-lg leading-relaxed">{post.solution}</p>
-</div>
+  return (
+    <div className="rounded-2xl border-2 border-green-500/30 bg-gradient-to-br from-green-500/5 to-emerald-500/5
+    backdrop-blur-sm p-4 md:p-6 space-y-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-green-600 flex items-center justify-center text-lg md:text-xl">
+            {post.author.avatar}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-white font-bold text-sm md:text-base">Anonymous</span>
+              <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-bold flex items-center gap-1">
+                <Lightbulb className="w-3 h-3" />
+                SOLUTION
+              </span>
+            </div>
+            <span className="text-purple-400 text-xs">{post.timeAgo}</span>
+          </div>
+        </div>
+        {post.verified && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 border border-blue-500/50 rounded-full">
+            <CheckCircle className="w-3 h-3 text-blue-400" />
+          </div>
+        )}
+      </div>
 
-<div className="p-3 md:p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-xl">
-<div className="text-emerald-300 font-bold text-xs mb-2">✨ THE IMPACT</div>
-<p className="text-emerald-100 font-medium text-sm md:text-base">{post.impact}</p>
-</div>
-</div>
+      <div className="space-y-4">
+        <div>
+          <div className="text-red-400 font-black text-xs mb-2 tracking-wider">THE PROBLEM</div>
+          <p className="text-purple-200 font-medium text-sm md:text-base pl-4">{post.problem}</p>
+        </div>
 
-{/* Community Stats */}
-<div className="flex items-center justify-between p-3 md:p-4 bg-white/5 rounded-xl border border-white/10 gap-2">
-<div className="flex items-center gap-2">
-<Users className="w-4 h-4 md:w-5 md:h-5 text-blue-400 flex-shrink-0" />
-<span className="text-white font-bold text-sm md:text-base">{post.reactions.trying}</span>
-<span className="text-purple-300 text-xs md:text-sm">trying this now</span>
-</div>
-<button className="px-3 md:px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold text-xs md:text-sm transition-all whitespace-nowrap">
-I'll Try This
-</button>
-</div>
+        <div className="flex items-center justify-center py-2">
+          <div className="flex flex-col items-center gap-1">
+            <ArrowDown className="w-6 h-6 md:w-8 md:h-8 text-green-400 animate-bounce" />
+            <span className="text-green-400 font-bold text-xs">SOLUTION</span>
+          </div>
+        </div>
 
-{/* Reactions */}
-<div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
-<button
-onClick={() => {
-handleReaction(post.id, 'relate');
-setLocalReactions({ ...localReactions, relate: localReactions.relate + (hasReacted.relate ? -1 : 1) });
-setHasReacted({ ...hasReacted, relate: !hasReacted.relate });
-}}
-className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${hasReacted.relate ? 'bg-pink-500/20' : 'bg-pink-500/10'}
-hover:bg-pink-500/20 border border-pink-500/30 rounded-lg transition-all`}
->
-<Heart className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.relate ? 'fill-pink-400' : ''} text-pink-400`} />
-<span className="text-pink-400 font-bold text-sm">{localReactions.relate}</span>
-</button>
+        <div className="p-4 md:p-5 bg-green-500/10 border-2 border-green-500/30 rounded-xl">
+          <p className="text-white font-bold text-base md:text-lg leading-relaxed">{post.solution}</p>
+        </div>
 
-<button className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-green-500/10 hover:bg-green-500/20
-border border-green-500/30 rounded-lg transition-all">
-<ThumbsUp className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
-<span className="text-green-400 font-bold text-sm">{localReactions.helped}</span>
-<span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Helped me</span>
-</button>
+        <div className="p-3 md:p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-xl">
+          <div className="text-emerald-300 font-bold text-xs mb-2">✨ THE IMPACT</div>
+          <p className="text-emerald-100 font-medium text-sm md:text-base">{post.impact}</p>
+        </div>
+      </div>
 
-<button className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20
-border border-purple-500/30 rounded-lg transition-all ml-auto">
-<Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
-</button>
-</div>
-</div>
-);
+      {/* Community Stats + Try Button */}
+      <div className="flex items-center justify-between p-3 md:p-4 bg-white/5 rounded-xl border border-white/10 gap-2">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 md:w-5 md:h-5 text-blue-400 flex-shrink-0" />
+          <span className="text-white font-bold text-sm md:text-base">{localTrying}</span>
+          <span className="text-purple-300 text-xs md:text-sm">trying this now</span>
+        </div>
+        <button
+          onClick={handleTryThis}
+          disabled={hasTried}
+          className={`px-3 md:px-4 py-2 rounded-lg text-white font-bold text-xs md:text-sm transition-all whitespace-nowrap ${
+            hasTried
+              ? 'bg-green-700 cursor-not-allowed flex items-center gap-1'
+              : 'bg-green-600 hover:bg-green-500'
+          }`}
+        >
+          {hasTried ? (
+            <>
+              <CheckCircle className="w-3 h-3" />
+              Added!
+            </>
+          ) : (
+            "I'll Try This"
+          )}
+        </button>
+      </div>
+
+      {/* Reactions Row */}
+      <div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
+        <button
+          onClick={() => {
+            handleReaction(post.id, 'relate');
+            setLocalReactions(prev => ({ ...prev, relate: prev.relate + (hasReacted.relate ? -1 : 1) }));
+            setHasReacted(prev => ({ ...prev, relate: !prev.relate }));
+          }}
+          className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
+            hasReacted.relate ? 'bg-pink-500/20' : 'bg-pink-500/10'
+          } hover:bg-pink-500/20 border border-pink-500/30 rounded-lg transition-all`}
+        >
+          <Heart className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.relate ? 'fill-pink-400' : ''} text-pink-400`} />
+          <span className="text-pink-400 font-bold text-sm">{localReactions.relate}</span>
+        </button>
+
+        <button
+          onClick={handleHelped}
+          disabled={hasReacted.helped}
+          className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
+            hasReacted.helped ? 'bg-green-500/30' : 'bg-green-500/10'
+          } hover:bg-green-500/20 border border-green-500/30 rounded-lg transition-all`}
+        >
+          <ThumbsUp className={`w-3 h-3 md:w-4 md:h-4 ${hasReacted.helped ? 'fill-green-400' : ''} text-green-400`} />
+          <span className="text-green-400 font-bold text-sm">{localReactions.helped}</span>
+          <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">
+            {hasReacted.helped ? 'Helped!' : 'Helped me'}
+          </span>
+        </button>
+
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20
+          border border-purple-500/30 rounded-lg transition-all ml-auto"
+        >
+          {copySuccess ? (
+            <>
+              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
+              <span className="text-green-400 text-xs md:text-sm">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
+              <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Share</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const ActivitySupportCard = ({ activity }) => {
@@ -1589,141 +1837,376 @@ const getAnxietyEmoji = (level) => {
 
 // ============================================ // MICRO CHALLENGE CARD // ============================================
 
-const MicroChallengeCard = ({ post }) => { const diffColors = { beginner: 'bg-green-500/10 border-green-500/30 text-green-400', intermediate: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400', advanced: 'bg-red-500/10 border-red-500/30 text-red-400' };
+const MicroChallengeCard = ({ post }) => {
+  const diffColors = {
+    beginner: 'bg-green-500/10 border-green-500/30 text-green-400',
+    intermediate: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+    advanced: 'bg-red-500/10 border-red-500/30 text-red-400'
+  };
 
- 
-const [hasJoined, setHasJoined] = useState(false);
-const [localJoined, setLocalJoined] = useState(post.reactions.joined);
+  const [hasJoined, setHasJoined] = useState(false);
+  const [localJoined, setLocalJoined] = useState(post.reactions?.joined || 0);
+  const [localRelate, setLocalRelate] = useState(post.reactions?.relate || 0);
+  const [hasRelated, setHasRelated] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [participants, setParticipants] = useState(post.participants || []);
+  const [showUpdateInput, setShowUpdateInput] = useState(false);
+  const [updateText, setUpdateText] = useState('');
+  const [updateStatus, setUpdateStatus] = useState('in-progress');
+  const [submittingUpdate, setSubmittingUpdate] = useState(false);
 
-return (
-<div className="rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 to-blue-500/5
-backdrop-blur-sm p-4 md:p-6 space-y-4">
-<div className="flex items-start justify-between gap-2">
-<div className="flex items-center gap-2 md:gap-3">
-<div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-cyan-600 flex items-center justify-center text-lg md:text-xl">
-{post.author.avatar}
-</div>
-<div>
-<div className="flex items-center gap-2">
-<span className="text-white font-bold text-sm md:text-base">Anonymous</span>
-<span className="px-2 py-0.5 bg-cyan-500 text-white text-xs rounded-full font-bold flex items-center gap-1">
-<Target className="w-3 h-3" />
-CHALLENGE
-</span>
-</div>
-<span className="text-purple-400 text-xs">{post.timeAgo}</span>
-</div>
-</div>
-<span className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold border ${diffColors[post.difficulty]}`}>
-{post.difficulty}
-</span>
-</div>
+  const currentUser = auth.currentUser;
 
-<div className="space-y-3">
-<div className="text-cyan-400 font-black text-xs tracking-wider">THE CHALLENGE</div>
-<p className="text-white text-xl md:text-2xl font-bold pl-4">{post.challenge}</p>
+  // Check if current user already joined on mount
+  useEffect(() => {
+    if (!currentUser) return;
+    const db = getFirestore();
+    const participantsRef = collection(
+      db, 'groups', 'socialAvoidance', 'posts', post.id, 'participants'
+    );
+    const unsub = onSnapshot(participantsRef, (snap) => {
+      const parts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setParticipants(parts);
+      const alreadyJoined = parts.some(p => p.uid === currentUser.uid);
+      setHasJoined(alreadyJoined);
+      setLocalJoined(parts.length);
+    });
+    return () => unsub();
+  }, [currentUser, post.id]);
 
-<div className="flex items-center gap-3 md:gap-4 pl-4 text-xs md:text-sm flex-wrap">
-<div className="flex items-center gap-2">
-<Clock className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
-<span className="text-purple-300 font-medium">{post.duration}</span>
-</div>
-<div className="flex items-center gap-2">
-<Users className="w-3 h-3 md:w-4 md:h-4 text-cyan-400" />
-<span className="text-cyan-400 font-bold">{localJoined}</span>
-<span className="text-purple-300">joined</span>
-</div>
-</div>
+  const handleJoinChallenge = async () => {
+    if (!currentUser) return;
+    const db = getFirestore();
+    const participantsRef = collection(
+      db, 'groups', 'socialAvoidance', 'posts', post.id, 'participants'
+    );
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
 
-{/* Why This Matters */}
-<div className="p-3 bg-cyan-900/10 border border-cyan-500/20 rounded-lg">
-<div className="text-cyan-300 font-bold text-xs mb-1">💡 WHY THIS MATTERS</div>
-<p className="text-cyan-100 text-sm">{post.whyThisMatters}</p>
-</div>
-</div>
-
-{/* Participants */}
-<div className="space-y-3 pt-4 border-t-2 border-white/5">
-<div className="text-white font-bold text-sm flex items-center gap-2">
-<Star className="w-4 h-4 text-yellow-400" />
-PEOPLE DOING IT
-</div>
-
-<div className="space-y-2 max-h-64 overflow-y-auto">
-{post.participants.map((p, idx) => (
-<div key={idx} className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-start gap-2 md:gap-3">
-<div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-cyan-600 flex items-center justify-center text-sm md:text-lg flex-shrink-0">
-{p.avatar}
-</div>
-<div className="flex-1 min-w-0">
-<div className="flex items-center gap-2 mb-1 flex-wrap">
-{p.status === 'done' ? (
-<CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
-) : p.status === 'setback' ? (
-<AlertCircle className="w-3 h-3 md:w-4 md:h-4 text-yellow-400" />
-) : (
-<Clock className="w-3 h-3 md:w-4 md:h-4 text-blue-400" />
-)}
-<span className={`text-xs font-bold ${
-p.status === 'done' ? 'text-green-400' :
-p.status === 'setback' ? 'text-yellow-400' :
-'text-blue-400'
-}`}>
-{p.status === 'done' ? 'COMPLETED' : p.status === 'setback' ? 'SETBACK' : 'IN PROGRESS'}
-</span>
-<span className="text-purple-400 text-xs">{p.timeAgo}</span>
-</div>
-<p className="text-purple-200 text-xs md:text-sm">{p.note}</p>
-</div>
-</div>
-))}
-</div>
-</div>
-
-{/* Join Button */}
-<button
-  data-tour="accept-challenge"
-  ref={(el) => {
-    if (el) {
-      console.log('✅ ACCEPT CHALLENGE BUTTON MOUNTED');
+    if (hasJoined) {
+      // Leave: find and delete their participant doc
+      const snap = await getDocs(participantsRef);
+      const myDoc = snap.docs.find(d => d.data().uid === currentUser.uid);
+      if (myDoc) {
+        await myDoc.ref.delete();
+      }
+      await updateDoc(postRef, { 'reactions.joined': increment(-1) });
+      setHasJoined(false);
+      setShowUpdateInput(false);
+    } else {
+      // Join: write participant doc
+      await addDoc(participantsRef, {
+        uid: currentUser.uid,
+        name: currentUser.displayName || 'Anonymous',
+        avatar: currentUser.photoURL || '👤',
+        status: 'in-progress',
+        note: 'Just joined!',
+        timeAgo: 'just now',
+        joinedAt: serverTimestamp(),
+      });
+      await updateDoc(postRef, { 'reactions.joined': increment(1) });
+      setHasJoined(true);
+      setShowUpdateInput(true);
     }
-  }}
-  onClick={() => {
-    setHasJoined(!hasJoined);
-    setLocalJoined(localJoined + (hasJoined ? -1 : 1));
-    handleReaction(post.id, 'join-challenge');
-  }}
-  className={`w-full px-4 md:px-6 py-3 md:py-4 ${hasJoined ? 'bg-green-600' : 'bg-gradient-to-r from-cyan-600 to-blue-600'}
-  hover:from-cyan-500 hover:to-blue-500 rounded-xl text-white font-bold text-base md:text-lg transition-all
-  flex items-center justify-center gap-2`}
-  >
-{hasJoined ? (
-<>
-<CheckCircle className="w-5 h-5" />
-Challenge Accepted! 🎯
-</>
-) : (
-<>
-<Target className="w-5 h-5" />
-Accept Challenge
-</>
-)}
-</button>
+  };
 
-{/* Reactions */}
-<div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
-<button className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-pink-500/10 hover:bg-pink-500/20
-border border-pink-500/30 rounded-lg transition-all">
-<Heart className="w-3 h-3 md:w-4 md:h-4 text-pink-400" />
-<span className="text-pink-400 font-bold text-sm">{post.reactions.relate}</span>
-</button>
-<button className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20
-border border-purple-500/30 rounded-lg transition-all ml-auto">
-<Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
-</button>
-</div>
-</div>
-);
+  const handlePostUpdate = async () => {
+    if (!updateText.trim() || !currentUser) return;
+    setSubmittingUpdate(true);
+
+    const db = getFirestore();
+    const participantsRef = collection(
+      db, 'groups', 'socialAvoidance', 'posts', post.id, 'participants'
+    );
+
+    // Find and update the user's participant doc
+    const snap = await getDocs(participantsRef);
+    const myDoc = snap.docs.find(d => d.data().uid === currentUser.uid);
+    if (myDoc) {
+      await updateDoc(myDoc.ref, {
+        status: updateStatus,
+        note: updateText.trim(),
+        timeAgo: 'just now',
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    setUpdateText('');
+    setShowUpdateInput(false);
+    setSubmittingUpdate(false);
+  };
+
+  const handleRelate = async () => {
+    const newRelated = !hasRelated;
+    setHasRelated(newRelated);
+    setLocalRelate(prev => prev + (newRelated ? 1 : -1));
+
+    const db = getFirestore();
+    const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+    await updateDoc(postRef, {
+      'reactions.relate': increment(newRelated ? 1 : -1)
+    });
+  };
+
+  const handleShare = async () => {
+    const shareText = `Challenge: ${post.challenge}\n\nWhy it matters: ${post.whyThisMatters}\n\nDuration: ${post.duration}`;
+    try {
+      await navigator.clipboard.writeText(shareText);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = shareText;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  return (
+    <div className="rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 backdrop-blur-sm p-4 md:p-6 space-y-4">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-cyan-600 flex items-center justify-center text-lg md:text-xl overflow-hidden">
+            {post.author?.avatar?.startsWith?.('http') ? (
+              <img src={post.author.avatar} alt="" className="w-full h-full object-cover" />
+            ) : (
+              post.author?.avatar || '👤'
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-white font-bold text-sm md:text-base">Anonymous</span>
+              <span className="px-2 py-0.5 bg-cyan-500 text-white text-xs rounded-full font-bold flex items-center gap-1">
+                <Target className="w-3 h-3" />
+                CHALLENGE
+              </span>
+            </div>
+            <span className="text-purple-400 text-xs">{post.timeAgo}</span>
+          </div>
+        </div>
+        <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold border ${diffColors[post.difficulty] || diffColors.beginner}`}>
+          {post.difficulty}
+        </span>
+      </div>
+
+      {/* Challenge Content */}
+      <div className="space-y-3">
+        <div className="text-cyan-400 font-black text-xs tracking-wider">THE CHALLENGE</div>
+        <p className="text-white text-xl md:text-2xl font-bold pl-4">{post.challenge}</p>
+
+        <div className="flex items-center gap-3 md:gap-4 pl-4 text-xs md:text-sm flex-wrap">
+          <div className="flex items-center gap-2">
+            <Clock className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
+            <span className="text-purple-300 font-medium">{post.duration}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="w-3 h-3 md:w-4 md:h-4 text-cyan-400" />
+            <span className="text-cyan-400 font-bold">{localJoined}</span>
+            <span className="text-purple-300">joined</span>
+          </div>
+        </div>
+
+        {/* Why This Matters */}
+        <div className="p-3 bg-cyan-900/10 border border-cyan-500/20 rounded-lg">
+          <div className="text-cyan-300 font-bold text-xs mb-1">💡 WHY THIS MATTERS</div>
+          <p className="text-cyan-100 text-sm">{post.whyThisMatters}</p>
+        </div>
+      </div>
+
+      {/* Participants */}
+      <div className="space-y-3 pt-4 border-t-2 border-white/5">
+        <div className="text-white font-bold text-sm flex items-center gap-2">
+          <Star className="w-4 h-4 text-yellow-400" />
+          PEOPLE DOING IT
+          <span className="text-cyan-400 font-bold text-xs ml-1">({participants.length})</span>
+        </div>
+
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {participants.length === 0 ? (
+            <p className="text-purple-400 text-sm text-center py-3 opacity-60">
+              Be the first to accept this challenge!
+            </p>
+          ) : (
+            participants.map((p, idx) => (
+              <div
+                key={p.id || idx}
+                className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-start gap-2 md:gap-3"
+              >
+                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-cyan-600 flex items-center justify-center text-sm md:text-lg flex-shrink-0 overflow-hidden">
+                  {p.avatar?.startsWith?.('http') ? (
+                    <img src={p.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    p.avatar || '👤'
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {p.status === 'done' ? (
+                      <CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
+                    ) : p.status === 'setback' ? (
+                      <AlertCircle className="w-3 h-3 md:w-4 md:h-4 text-yellow-400" />
+                    ) : (
+                      <Clock className="w-3 h-3 md:w-4 md:h-4 text-blue-400" />
+                    )}
+                    <span className={`text-xs font-bold ${
+                      p.status === 'done' ? 'text-green-400' :
+                      p.status === 'setback' ? 'text-yellow-400' :
+                      'text-blue-400'
+                    }`}>
+                      {p.status === 'done' ? 'COMPLETED' :
+                       p.status === 'setback' ? 'SETBACK' : 'IN PROGRESS'}
+                    </span>
+                    <span className="text-purple-400 text-xs">{p.timeAgo}</span>
+                    {p.uid === currentUser?.uid && (
+                      <span className="text-cyan-400 text-xs font-bold">· You</span>
+                    )}
+                  </div>
+                  <p className="text-purple-200 text-xs md:text-sm">{p.note}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Post Update Input (shown after joining) */}
+      {hasJoined && showUpdateInput && (
+        <div className="space-y-3 p-4 bg-cyan-900/10 border border-cyan-500/20 rounded-xl">
+          <p className="text-cyan-300 font-bold text-xs tracking-wider">POST A PROGRESS UPDATE</p>
+
+          {/* Status selector */}
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { value: 'in-progress', label: 'In Progress', color: 'bg-blue-500/20 border-blue-500/40 text-blue-400' },
+              { value: 'done', label: 'Completed ✓', color: 'bg-green-500/20 border-green-500/40 text-green-400' },
+              { value: 'setback', label: 'Had a setback', color: 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setUpdateStatus(opt.value)}
+                className={`px-3 py-1 rounded-lg border text-xs font-bold transition-all ${opt.color} ${
+                  updateStatus === opt.value ? 'opacity-100 ring-2 ring-white/20' : 'opacity-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            placeholder="How's it going? Share your experience..."
+            value={updateText}
+            onChange={(e) => setUpdateText(e.target.value)}
+            rows={2}
+            className="w-full px-3 py-2 bg-slate-900 border border-cyan-500/30 rounded-lg text-white text-sm placeholder-purple-500 focus:border-cyan-500 focus:outline-none resize-none"
+          />
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowUpdateInput(false)}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handlePostUpdate}
+              disabled={!updateText.trim() || submittingUpdate}
+              className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 rounded-lg text-white font-bold text-sm transition-all"
+            >
+              {submittingUpdate ? 'Posting...' : 'Post Update'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Update button shown if already joined and input is hidden */}
+      {hasJoined && !showUpdateInput && (
+        <button
+          onClick={() => setShowUpdateInput(true)}
+          className="w-full py-2 border border-dashed border-cyan-500/30 hover:border-cyan-500 rounded-xl text-cyan-400 text-sm font-medium transition-all flex items-center justify-center gap-2"
+        >
+          <TrendingUp className="w-4 h-4" />
+          Post a progress update
+        </button>
+      )}
+
+      {/* Join Button */}
+      <button
+        data-tour="accept-challenge"
+        onClick={handleJoinChallenge}
+        className={`w-full px-4 md:px-6 py-3 md:py-4 rounded-xl text-white font-bold text-base md:text-lg transition-all flex items-center justify-center gap-2 ${
+          hasJoined
+            ? 'bg-green-600 hover:bg-red-600'
+            : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500'
+        }`}
+      >
+        {hasJoined ? (
+          <>
+            <CheckCircle className="w-5 h-5" />
+            Challenge Accepted! · Leave
+          </>
+        ) : (
+          <>
+            <Target className="w-5 h-5" />
+            Accept Challenge
+          </>
+        )}
+      </button>
+
+      {/* Reactions */}
+      <div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
+
+        {/* Relate Button */}
+        <button
+          onClick={handleRelate}
+          className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
+            hasRelated ? 'bg-pink-500/20' : 'bg-pink-500/10'
+          } hover:bg-pink-500/20 border border-pink-500/30 rounded-lg transition-all`}
+        >
+          <Heart className={`w-3 h-3 md:w-4 md:h-4 ${hasRelated ? 'fill-pink-400' : ''} text-pink-400`} />
+          <span className="text-pink-400 font-bold text-sm">{localRelate}</span>
+          <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">
+            {hasRelated ? 'Relating' : 'I relate'}
+          </span>
+        </button>
+
+        {/* Cheer Button */}
+        <button
+          onClick={async () => {
+            const db = getFirestore();
+            const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
+            await updateDoc(postRef, { 'reactions.cheering': increment(1) });
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 rounded-lg transition-all text-yellow-400 text-xs font-bold"
+        >
+          <Star className="w-3 h-3 md:w-4 md:h-4" />
+          <span>{post.reactions?.cheering || 0}</span>
+          <span className="hidden sm:inline">Cheer</span>
+        </button>
+
+        {/* Share Button */}
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg transition-all ml-auto"
+        >
+          {copySuccess ? (
+            <>
+              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
+              <span className="text-green-400 text-xs md:text-sm">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
+              <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Share</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // ============================================
@@ -2088,6 +2571,23 @@ const PartnerMatchModal = ({ isOpen, onClose, currentUser }) => {
     }
   }, [isOpen, filters]);
 
+
+  useEffect(() => {
+  if (!currentUser) return;
+  const db = getFirestore();
+
+  const fetchPotentialMatches = async () => {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const matches = usersSnap.docs
+      .filter(d => d.id !== currentUser.uid)
+      .map(d => ({ id: d.id, ...d.data() }))
+      .slice(0, 20); // limit to 20
+    setPotentialMatches(matches);
+  };
+
+  fetchPotentialMatches();
+}, [currentUser]);
+
   const fetchPotentialPartners = async () => {
     setLoading(true);
     try {
@@ -2117,6 +2617,33 @@ const PartnerMatchModal = ({ isOpen, onClose, currentUser }) => {
     }
     setLoading(false);
   };
+
+
+  const handleConnectPartner = async (targetUser) => {
+  if (!currentUser) return;
+  const db = getFirestore();
+
+  // Write to YOUR partners list
+  await addDoc(collection(db, 'users', currentUser.uid, 'partners'), {
+    partnerId: targetUser.id,
+    partnerName: targetUser.displayName || targetUser.name || 'Anonymous',
+    partnerPhoto: targetUser.photoURL || targetUser.photo || '👤',
+    connectedAt: serverTimestamp(),
+    status: 'pending',
+  });
+
+  // Write to THEIR partners list
+  await addDoc(collection(db, 'users', targetUser.id, 'partners'), {
+    partnerId: currentUser.uid,
+    partnerName: currentUser.displayName || 'Anonymous',
+    partnerPhoto: currentUser.photoURL || '👤',
+    connectedAt: serverTimestamp(),
+    status: 'pending',
+  });
+
+  setShowPartnerModal(false);
+  alert(`Partner request sent to ${targetUser.displayName || 'this user'}!`);
+};
 
   const handleSendRequest = async (partnerId) => {
     const db = getFirestore();
