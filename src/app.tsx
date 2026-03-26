@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+
+
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from 'src/theme/theme-provider';
 import { usePathname } from 'src/routes/hooks';
@@ -10,6 +12,8 @@ import BottomNav from './MobileNav';
 import mixpanel from 'mixpanel-browser';
 import { AppBar, Toolbar } from '@mui/material';
 import './styles/onboarding.css';
+import { TrialTimer } from './components/TrialTimer';
+import { isTrialExpired } from './lib/trialTimer';
 
 type AppProps = {
   children: React.ReactNode;
@@ -174,6 +178,11 @@ export default function App({ children }: AppProps) {
 
       {/* Bottom Nav */}
       <BottomNav />
+
+
+      {/* Trial Timer — floats over everything */}
+      {!isTrialExpired() && <TrialTimer />}
+      
     </div>
 
     <style>
