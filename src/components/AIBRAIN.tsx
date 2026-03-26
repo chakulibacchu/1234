@@ -323,54 +323,107 @@ const initSessionSilent = (id: string) => {
   e?.preventDefault?.();
   setLoading(true);
   setErrorText(null);
-  
+
   try {
-    const apiKeys = await getApiKeys();
-    const apiKey = apiKeys[apiKeys.length - 1];
+    // ── 1. Guard: userId ──────────────────────────────────────────
+    if (!userId) {
+      pushBotMessage("⚠️ Still loading your account. Wait a second and try again.");
+      return;
+    }
 
-    // 🔥 Kick off session init silently when user submits phase 1
-    initSessionSilent(userId);
+    // ── 2. Guard: API key ─────────────────────────────────────────
+    let apiKey = "";
+    try {
+      const keys = await getApiKeys();
+      apiKey = keys?.[keys.length - 1] ?? "";
+    } catch {
+      pushBotMessage("⚠️ Could not load API key. Check your settings.");
+      return;
+    }
 
-    const submissionSummary = `Problem: ${phase1Data.main_problem}\nWhere: ${phase1Data.where_happens}\nFeeling: ${phase1Data.how_feels}\nImpact: ${phase1Data.impact}`;
+    if (!apiKey) {
+      pushBotMessage("⚠️ API key is empty. Check your settings.");
+      return;
+    }
+
+    // ── 3. Guard: form data ───────────────────────────────────────
+    const { main_problem, where_happens, how_feels, impact } = phase1Data;
+    if (!main_problem || !where_happens || !how_feels || !impact) {
+      pushBotMessage("⚠️ Please answer all questions before submitting.");
+      return;
+    }
+
+    // ── 4. Log what we're sending ─────────────────────────────────
+    console.log("📤 Phase 1 submit", { userId, apiKey, phase1Data });
+
+    const submissionSummary = `Problem: ${main_problem}\nWhere: ${where_happens}\nFeeling: ${how_feels}\nImpact: ${impact}`;
     pushUserMessage(submissionSummary);
 
-    console.log("📤 Submitting Phase 1:", phase1Data);
+    // ── 5. Fetch with timeout ─────────────────────────────────────
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-    const res = await fetch(`${API_BASE}/submit-phase-data`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        phase: 1,
-        form_data: phase1Data,
-        api_key: apiKey
-      })
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/submit-phase-data`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          phase: 1,
+          form_data: phase1Data,
+          api_key: apiKey
+        }),
+        signal: controller.signal
+      });
+    } catch (fetchErr: any) {
+      if (fetchErr?.name === "AbortError") {
+        pushBotMessage("⚠️ Request timed out. Backend might be slow — try again.");
+      } else {
+        pushBotMessage(`⚠️ Network error: ${fetchErr?.message}`);
+      }
+      return;
+    } finally {
+      clearTimeout(timeout);
+    }
 
+    // ── 6. Handle non-OK responses ────────────────────────────────
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`HTTP ${res.status} — ${txt}`);
+      console.error("❌ Backend error:", res.status, txt);
+      pushBotMessage(`⚠️ Server error ${res.status}: ${txt}`);
+      return;
     }
 
-    const data = await res.json();
+    // ── 7. Parse response ─────────────────────────────────────────
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      pushBotMessage("⚠️ Got a bad response from server. Try again.");
+      return;
+    }
+
     console.log("✅ Phase 1 response:", data);
-    
+
+    // ── 8. Show Jordan's reply ────────────────────────────────────
     if (data.response) {
       pushBotMessage(data.response);
+    } else {
+      pushBotMessage("Got it! Moving to Phase 2.");
     }
-    
+
+    // ── 9. Advance phase ──────────────────────────────────────────
     if (data.ready_for_next_phase && data.phase) {
       console.log(`✅ Advancing to phase ${data.phase}`);
       setPhase(data.phase);
     }
-  } catch (err) {
-    console.error("❌ Submit error:", err);
-    setErrorText(String(err?.message || err));
-    pushBotMessage(`⚠️ Submit error: ${String(err?.message || err)}`);
+
   } finally {
     setLoading(false);
   }
 };
+
 
 
 const submitPhase2 = async (e) => {
@@ -1816,12 +1869,7 @@ const renderPhase4Form = () => {
             ))}
           </div>
 
-          <button
-            onClick={() => onComplete?.()}
-            className="w-full mt-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition"
-          >
-            Next Step
-          </button>
+          
         </div>
       </div>
     );
