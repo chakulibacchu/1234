@@ -911,99 +911,15 @@ const handleFirstStepsComplete = () => {
 
       {/* App Download Full-Screen Overlay */}
       <AnimatePresence>{showAppDownload && (
-          <motion.div
-            className="fixed inset-0 z-[9999] flex flex-col items-center justify-center px-6"
-            style={{ background: "linear-gradient(135deg, #0f0a1e 0%, #1a0a2e 40%, #0d1a3a 100%)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <motion.div
-              className="relative w-full max-w-sm text-center"
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-            >
-              {/* App icon */}
-              <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-pink-500 via-purple-600 to-blue-600 flex items-center justify-center shadow-2xl shadow-purple-500/50 ring-4 ring-white/10">
-                <span className="text-5xl">📱</span>
-              </div>
-
-              {/* Live badge */}
-              <div className="inline-flex items-center gap-1.5 bg-purple-500/20 border border-purple-400/30 rounded-full px-3 py-1 mb-4">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-purple-200 text-xs font-semibold tracking-wide uppercase">Now Available on Android</span>
-              </div>
-
-              {/* Headline */}
-              <h2 className="text-4xl font-extrabold text-white mb-3 leading-tight">
-                Your journey is better<br />
-                <span className="bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
-                  in your pocket.
-                </span>
-              </h2>
-
-              <p className="text-slate-300 text-base leading-relaxed mb-5">
-                You've just unlocked your personalised social skills plan. Don't let it sit on a browser tab — keep it with you every single day.
-              </p>
-
-              {/* Selling points */}
-              <div className="space-y-2.5 mb-8 text-left">
-                {[
-                  { emoji: "🔔", text: "Daily mission reminders so you never miss a day" },
-                  { emoji: "⚡", text: "Faster, smoother experience built for mobile" },
-                  { emoji: "🔒", text: "Progress, streaks & data — all synced instantly" },
-                  { emoji: "🌙", text: "Works offline, so you can practice anywhere" },
-                ].map((item, i) => (
-                  <motion.div
-                    key={i}
-                    className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + i * 0.08 }}
-                  >
-                    <span className="text-xl flex-shrink-0">{item.emoji}</span>
-                    <span className="text-slate-200 text-sm">{item.text}</span>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Google Play CTA */}
-              <motion.a
-                href="https://play.google.com/store/apps/details?id=app.connect.mobile"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-3 w-full px-5 py-4 bg-white text-gray-900 font-bold text-base rounded-2xl shadow-2xl hover:scale-[1.03] active:scale-[0.98] transition-transform duration-200 mb-3"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-              >
-                <svg className="w-7 h-7" viewBox="0 0 512 512">
-                  <path fill="#4CAF50" d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1z"/>
-                  <path fill="#FF3D00" d="M47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.1-256L47 0z"/>
-                  <path fill="#FFD600" d="M401.4 233.7l-87.8-50.4-66.7 64.7 66.7 64.7 89.2-51.1c12.8-7.4 12.8-20.6-1.4-28z"/>
-                  <path fill="#FF3D00" d="M104.6 499l280.8-161.2-60.1-60.1L104.6 499z"/>
-                </svg>
-                <div className="text-left">
-                  <div className="text-[10px] text-gray-500 leading-none">Get it on</div>
-                  <div className="text-base font-extrabold leading-tight">Google Play</div>
-                </div>
-              </motion.a>
-
-              <p className="text-slate-500 text-xs mb-8">🍎 iOS App Store coming soon</p>
-
-              {/* No thanks — small, understated */}
-              <button
-                type="button"
-                onClick={() => { setShowAppDownload(false); setShowFirstSteps(true); }}
-                className="text-slate-600 hover:text-slate-400 text-sm transition-colors underline underline-offset-4"
-              >
-                No thanks, continue in browser
-              </button>
-            </motion.div>
-          </motion.div>
+          <AppPreviewScreen
+            onContinue={() => {
+              startTrial();
+              setShowAppPreview(false);
+              setShowAppDownload(true);
+            }}
+          />
         )}
+
       </AnimatePresence>
       </>
     );
