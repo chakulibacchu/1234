@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getSecondsRemaining, isTrialExpired } from "@/lib/trialTimer";
+import { getSecondsRemaining } from "@/lib/trialTimer";
 
 export function TrialTimer() {
   const [seconds, setSeconds] = useState(getSecondsRemaining());
@@ -8,9 +8,7 @@ export function TrialTimer() {
   const [warningText, setWarningText] = useState("");
   const [showExpiredModal, setShowExpiredModal] = useState(false);
 
-  // Don't render at all if trial never started
   const start = sessionStorage.getItem("trial_start_time");
-  if (!start) return null;
 
   const fmt = (s: number) => {
     const m = Math.floor(s / 60);
@@ -23,6 +21,7 @@ export function TrialTimer() {
   }, []);
 
   useEffect(() => {
+    if (!start) return;
     const interval = setInterval(() => {
       const remaining = getSecondsRemaining();
       setSeconds(remaining);
@@ -44,7 +43,10 @@ export function TrialTimer() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [handleExpired]);
+  }, [handleExpired, start]);
+
+  // Don't render at all if trial never started
+  if (!start) return null;
 
   const timerColor =
     seconds <= 30
@@ -125,13 +127,12 @@ export function TrialTimer() {
                 ))}
               </div>
 
-                <a
+              <a
                 href="https://play.google.com/store/apps/details?id=app.connect.mobile"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-3 w-full px-5 py-4 bg-white text-gray-900 font-bold text-base rounded-2xl shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-transform mb-3"
               >
-
                 <svg className="w-7 h-7" viewBox="0 0 512 512">
                   <path fill="#4CAF50" d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1z"/>
                   <path fill="#FF3D00" d="M47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.1-256L47 0z"/>

@@ -6,6 +6,7 @@ const API_BASE = "https://pythonbackend-74es.onrender.com";
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, updateDoc, collection, query, limit, getDocs } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { startTrial } from "@/lib/trialTimer";
 import { setUserId } from "firebase/analytics";
 
 
@@ -2062,7 +2063,7 @@ const renderPhase4Form = () => {
               </button>
               {planGenerated && (
                 <button 
-                  onClick={() => onComplete?.()} 
+                  onClick={() => { startTrial(); onComplete?.(); }} 
                   className="py-2 px-4 bg-green-600 rounded-xl hover:bg-green-700 transition flex items-center gap-2"
                 >
                   <CheckCircle className="w-4 h-4" />

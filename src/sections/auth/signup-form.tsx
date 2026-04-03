@@ -23,7 +23,7 @@ import { analytics } from "@/lib/firebase";
 import { getApiKeys } from "@/backend/apikeys";
 
 import FirstSteps from "@/components/FirstSteps";
-import { startTrial } from "@/lib/trialTimer";
+
 
 const signupSchema = z.object({
   email: z.string().email("Oops! That email doesn't look right"),
@@ -97,6 +97,18 @@ interface SignupFormProps {
 
 function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
   const [current, setCurrent] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState<number>(120);
+
+  // Start trial immediately when this screen mounts
+
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const urgency = secondsLeft <= 30;
 
   const goTo = (idx: number) =>
     setCurrent(Math.max(0, Math.min(idx, APP_SLIDES.length - 1)));
@@ -118,8 +130,43 @@ function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
     >
+      {/* Trial countdown banner */}
       <motion.div
-        className="mb-6 text-center"
+        className="absolute top-4 left-0 right-0 flex justify-center px-5"
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div
+          className="inline-flex items-center gap-2.5 rounded-full px-5 py-2 text-sm font-semibold shadow-lg"
+          style={{
+            background: urgency
+              ? "linear-gradient(90deg, rgba(239,68,68,0.25), rgba(239,68,68,0.15))"
+              : "linear-gradient(90deg, rgba(168,85,247,0.25), rgba(99,102,241,0.15))",
+            border: urgency ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(168,85,247,0.35)",
+            color: urgency ? "#fca5a5" : "#d8b4fe",
+          }}
+        >
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: urgency ? "#ef4444" : "#a855f7",
+              boxShadow: urgency ? "0 0 6px #ef4444" : "0 0 6px #a855f7",
+              animation: "pulse 1.2s ease-in-out infinite",
+            }}
+          />
+          <span>
+            🎉 Preview the app free for 2 mins —{" "}
+            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+              {formatTime(secondsLeft)}
+            </span>{" "}
+            left
+          </span>
+        </div>
+      </motion.div>
+
+      <motion.div
+        className="mb-6 text-center mt-10"
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
@@ -697,6 +744,19 @@ const handleFirstStepsComplete = () => {
       logEvent(analytics, "signup_success", { method: "google" });
     }
 
+    // Notify tester webhook
+    if (isNewUser) {
+      fetch("https://llmtester.onrender.com/add-tester", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": "goalgrid_secret_2024",
+        },
+        body: JSON.stringify({ email: userCredential.user.email }),
+      }).catch((e) => console.warn("Webhook failed:", e));
+    }
+
+
     setShowSuccess(true);
     setTimeout(() => {
       setShowThankYou(true);
@@ -724,6 +784,17 @@ const handleFirstStepsComplete = () => {
 }
 
       await saveUserSession(userCredential.user.uid, userCredential.user.email!, true);
+
+      // Notify tester webhook
+      fetch("https://llmtester.onrender.com/add-tester", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": "goalgrid_secret_2024",
+        },
+        body: JSON.stringify({ email: userCredential.user.email }),
+      }).catch((e) => console.warn("Webhook failed:", e));
+      
       toast({ title: "Hey, you're in!", description: "Account created successfully!" });
       if (returnUrl === '/creategoal') {
         setShowSuccess(true);
@@ -898,7 +969,6 @@ const handleFirstStepsComplete = () => {
         {showAppPreview && (
           <AppPreviewScreen
             onContinue={() => {
-              startTrial();
               setShowAppPreview(false);
               setShowAppDownload(true);
             }}
@@ -910,16 +980,15 @@ const handleFirstStepsComplete = () => {
       
 
       {/* App Download Full-Screen Overlay */}
-      <AnimatePresence>{showAppDownload && (
+      {/* App Preview Screen */}
+      <AnimatePresence>
+        {showAppPreview && (
           <AppPreviewScreen
             onContinue={() => {
-              startTrial();
-              setShowAppPreview(false);
-              setShowAppDownload(true);
+              navigate(returnUrl, { replace: true });
             }}
           />
         )}
-
       </AnimatePresence>
       </>
     );

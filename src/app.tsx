@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from 'src/theme/theme-provider';
 import { usePathname } from 'src/routes/hooks';
@@ -10,10 +9,10 @@ import { auth, db } from './firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import BottomNav from './MobileNav';
 import mixpanel from 'mixpanel-browser';
-import { AppBar, Toolbar } from '@mui/material';
 import './styles/onboarding.css';
 import { TrialTimer } from './components/TrialTimer';
-import { isTrialExpired } from './lib/trialTimer';
+import { TrialExpiredPage } from './components/TrialExpiredPage';
+import { isTrialExpired, startTrial } from './lib/trialTimer';
 
 type AppProps = {
   children: React.ReactNode;
@@ -38,8 +37,21 @@ export default function App({ children }: AppProps) {
   const [authInitialized, setAuthInitialized] = useState(false);
   const [userData, setUserData] = useState<any>(null);
 
+  // Reactive trial state — re-checks every second
+  const [trialExpired, setTrialExpired] = useState(isTrialExpired);
 
-  const TOP_BAR_HEIGHT = 56;
+
+
+  useEffect(() => {
+    if (trialExpired) return;
+    const interval = setInterval(() => {
+      if (isTrialExpired()) {
+        setTrialExpired(true);
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [trialExpired]);
 
   // Mixpanel init
   useEffect(() => {
@@ -148,61 +160,56 @@ export default function App({ children }: AppProps) {
   }
 
   return (
-  <ThemeProvider>
-    <CssBaseline />
+    <ThemeProvider>
+      <CssBaseline />
 
-    <div
-      style={{
-        height: '100vh',
-        width: '100vw',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'linear-gradient(135deg, #240046, #330066)',
-        position: 'relative',
-      }}
-    >
-
-
-      {/* Scrollable content */}
       <div
         style={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
+          height: '100vh',
+          width: '100vw',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'linear-gradient(135deg, #240046, #330066)',
           position: 'relative',
-          marginTop: `${TOP_BAR_HEIGHT}px`,
         }}
       >
-        {children}
+        {/* Scrollable content */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            position: 'relative',
+            marginTop: `${TOP_BAR_HEIGHT}px`,
+          }}
+        >
+          {trialExpired ? <TrialExpiredPage /> : children}
+        </div>
+
+        {/* Bottom Nav — hidden when trial expired */}
+        {!trialExpired && <BottomNav />}
+
+        {/* Trial Timer — floats over everything */}
+        {!trialExpired && <TrialTimer />}
       </div>
 
-      {/* Bottom Nav */}
-      <BottomNav />
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
 
+          html {
+            font-size: 13px;
+          }
 
-      {/* Trial Timer — floats over everything */}
-      {!isTrialExpired() && <TrialTimer />}
-      
-    </div>
-
-    <style>
-      {`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        html {
-          font-size: 13px;
-        }
-
-        body {
-          font-size: 1rem;
-          line-height: 1.5;
-        }
-      `}
-    </style>
-  </ThemeProvider>
-);
-
+          body {
+            font-size: 1rem;
+            line-height: 1.5;
+          }
+        `}
+      </style>
+    </ThemeProvider>
+  );
 }
