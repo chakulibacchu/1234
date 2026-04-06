@@ -95,6 +95,57 @@ interface SignupFormProps {
   onSignupSuccess?: () => void;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Robust tester notifier — retries with exponential backoff until success.
+// Max 10 attempts (~5 min total window). Runs entirely in the background.
+// ─────────────────────────────────────────────────────────────────────────────
+async function notifyTester(email: string): Promise<void> {
+  const MAX_ATTEMPTS = 10;
+  const BASE_DELAY_MS = 1000; // 1s → 2s → 4s → 8s … capped at 32s
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const resp = await fetch("https://llmtester.onrender.com/add-tester", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": "goalgrid_secret_2024",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (resp.ok) {
+        console.log(`✅ Tester notified on attempt ${attempt}`);
+        return; // success — stop retrying
+      }
+
+      // Non-2xx response — treat as retryable
+      const body = await resp.text().catch(() => "(unreadable)");
+      console.warn(
+        `⚠️ Tester webhook attempt ${attempt}/${MAX_ATTEMPTS} got HTTP ${resp.status}: ${body}`
+      );
+    } catch (err) {
+      // Network failure — retryable
+      console.warn(
+        `⚠️ Tester webhook attempt ${attempt}/${MAX_ATTEMPTS} threw:`,
+        err
+      );
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      const delay = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), 32_000);
+      console.log(`🔄 Retrying tester webhook in ${delay / 1000}s…`);
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+
+  // All attempts exhausted — log but don't crash the caller
+  console.error(
+    `❌ Tester webhook failed after ${MAX_ATTEMPTS} attempts for ${email}. Giving up.`
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
   const [current, setCurrent] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState<number>(120);
@@ -267,35 +318,36 @@ function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
       </AnimatePresence>
 
       <motion.div
-        className="w-full max-w-xs text-center"
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+  className="w-full max-w-xs text-center"
+  initial={{ opacity: 0, y: 18 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3 }}
+>
+  {isLast ? (
+    <>
+      <p className="text-slate-500 text-xs mb-3">
+        🔒 Closed beta — grab your spot before it fills up
+      </p>
+      <button
+        onClick={() => window.location.href = '/trial'}
+        className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
       >
-        {isLast ? (
-          <>
-            <p className="text-slate-500 text-xs mb-3">
-              🔒 Closed beta — grab your spot before it fills up
-            </p>
-            <button
-              onClick={onContinue}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
-            >
-              Join Closed Beta →
-            </button>
-            <p className="text-slate-600 text-xs mt-3">
-              Your plan is already saved — don't lose access to it
-            </p>
-          </>
-        ) : (
-          <button
-            onClick={() => goTo(current + 1)}
-            className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white font-semibold text-sm hover:bg-white/15 transition-colors"
-          >
-            Next →
-          </button>
-        )}
-      </motion.div>
+        Join Closed Beta →
+      </button>
+      <p className="text-slate-600 text-xs mt-3">
+        Your plan is already saved — don't lose access to it
+      </p>
+    </>
+  ) : (
+    <button
+      onClick={() => goTo(current + 1)}
+      className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white font-semibold text-sm hover:bg-white/15 transition-colors"
+    >
+      Next →
+    </button>
+  )}
+</motion.div>
+
     </motion.div>
   );
 }
@@ -744,18 +796,10 @@ const handleFirstStepsComplete = () => {
       logEvent(analytics, "signup_success", { method: "google" });
     }
 
-    // Notify tester webhook
+    // Fire-and-forget with persistent retry — never blocks the user flow
     if (isNewUser) {
-      fetch("https://llmtester.onrender.com/add-tester", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Webhook-Secret": "goalgrid_secret_2024",
-        },
-        body: JSON.stringify({ email: userCredential.user.email }),
-      }).catch((e) => console.warn("Webhook failed:", e));
+      notifyTester(userCredential.user.email!);
     }
-
 
     setShowSuccess(true);
     setTimeout(() => {
@@ -785,15 +829,8 @@ const handleFirstStepsComplete = () => {
 
       await saveUserSession(userCredential.user.uid, userCredential.user.email!, true);
 
-      // Notify tester webhook
-      fetch("https://llmtester.onrender.com/add-tester", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Webhook-Secret": "goalgrid_secret_2024",
-        },
-        body: JSON.stringify({ email: userCredential.user.email }),
-      }).catch((e) => console.warn("Webhook failed:", e));
+      // Fire-and-forget with persistent retry — never blocks the user flow
+      notifyTester(userCredential.user.email!);
       
       toast({ title: "Hey, you're in!", description: "Account created successfully!" });
       if (returnUrl === '/creategoal') {
@@ -964,17 +1001,7 @@ const handleFirstStepsComplete = () => {
 
 
 
-      {/* App Preview Screen */}
-      <AnimatePresence>
-        {showAppPreview && (
-          <AppPreviewScreen
-            onContinue={() => {
-              setShowAppPreview(false);
-              setShowAppDownload(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      
 
 
       
