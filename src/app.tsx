@@ -19,6 +19,8 @@ type AppProps = {
 };
 
 const TOP_BAR_HEIGHT = 56;
+const SCREEN_WIDTH = 390;
+const SCREEN_HEIGHT = 844;
 
 function useScrollToTop() {
   const pathname = usePathname();
@@ -37,10 +39,7 @@ export default function App({ children }: AppProps) {
   const [authInitialized, setAuthInitialized] = useState(false);
   const [userData, setUserData] = useState<any>(null);
 
-  // Reactive trial state — re-checks every second
   const [trialExpired, setTrialExpired] = useState(isTrialExpired);
-
-
 
   useEffect(() => {
     if (trialExpired) return;
@@ -53,7 +52,6 @@ export default function App({ children }: AppProps) {
     return () => clearInterval(interval);
   }, [trialExpired]);
 
-  // Mixpanel init
   useEffect(() => {
     mixpanel.init('3f57bf9b5f5d11792f52742c157e9004', {
       autocapture: true,
@@ -61,7 +59,6 @@ export default function App({ children }: AppProps) {
     });
   }, []);
 
-  // Track page views & identify user
   useEffect(() => {
     if (!loading && authInitialized) {
       if (user) {
@@ -72,7 +69,6 @@ export default function App({ children }: AppProps) {
           uid: user.uid,
         });
       }
-
       mixpanel.track('Page View', {
         page: pathname,
         uid: user?.uid,
@@ -80,7 +76,6 @@ export default function App({ children }: AppProps) {
     }
   }, [pathname, loading, authInitialized, user]);
 
-  // Auth & Firestore sync
   useEffect(() => {
     const init = async () => {
       if (loading) return;
@@ -101,11 +96,7 @@ export default function App({ children }: AppProps) {
           await setDoc(ref, data);
         } else {
           data = snap.data();
-          await setDoc(
-            ref,
-            { lastLogin: new Date().toISOString() },
-            { merge: true }
-          );
+          await setDoc(ref, { lastLogin: new Date().toISOString() }, { merge: true });
         }
 
         localStorage.setItem('goalgrid_auth', JSON.stringify(data));
@@ -116,9 +107,7 @@ export default function App({ children }: AppProps) {
 
         const publicPaths = ['/sign-in', '/onboarding'];
         const isPublic = publicPaths.some(p => pathname.startsWith(p));
-        if (!isPublic) {
-          navigate('/sign-in');
-        }
+        if (!isPublic) navigate('/sign-in');
       }
 
       setAuthInitialized(true);
@@ -127,7 +116,7 @@ export default function App({ children }: AppProps) {
     init();
   }, [user, loading, pathname]);
 
-  // Loading screen
+  // ─── Loading Screen ───────────────────────────────────────────────────────
   if (loading || !authInitialized) {
     return (
       <ThemeProvider>
@@ -136,7 +125,6 @@ export default function App({ children }: AppProps) {
           style={{
             height: '100vh',
             width: '100vw',
-            overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -144,53 +132,92 @@ export default function App({ children }: AppProps) {
           }}
         >
           <div
-            className="loading-spinner"
             style={{
-              width: '4rem',
-              height: '4rem',
-              border: '0.25rem solid rgba(168,85,247,0.3)',
-              borderTop: '0.25rem solid #a855f7',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
+              width: SCREEN_WIDTH,
+              height: SCREEN_HEIGHT,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, #240046, #330066)',
+              borderRadius: '2rem',
+              overflow: 'hidden',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
             }}
-          />
+          >
+            <div
+              className="loading-spinner"
+              style={{
+                width: '4rem',
+                height: '4rem',
+                border: '0.25rem solid rgba(168,85,247,0.3)',
+                borderTop: '0.25rem solid #a855f7',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+          </div>
         </div>
       </ThemeProvider>
     );
   }
 
+  // ─── Main App ─────────────────────────────────────────────────────────────
   return (
     <ThemeProvider>
       <CssBaseline />
 
+      {/* Outer: fills viewport, centers the screen */}
       <div
         style={{
           height: '100vh',
           width: '100vw',
           display: 'flex',
-          flexDirection: 'column',
-          background: 'linear-gradient(135deg, #240046, #330066)',
-          position: 'relative',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0a0a0a',
         }}
       >
-        {/* Scrollable content */}
+        {/* ── Phone Screen Container ── */}
         <div
           style={{
-            flex: 1,
-            overflowY: 'auto',
-            overflowX: 'hidden',
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'linear-gradient(135deg, #240046, #330066)',
+            borderRadius: '2rem',
+            overflow: 'hidden',
+            boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
             position: 'relative',
-            marginTop: `${TOP_BAR_HEIGHT}px`,
           }}
         >
-          {trialExpired ? <TrialExpiredPage /> : children}
+          {/* Scrollable content area */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              position: 'relative',
+              marginTop: `${TOP_BAR_HEIGHT}px`,
+            }}
+          >
+            {/* Scale wrapper — adjust 0.9 to taste */}
+            <div
+              style={{
+                transform: 'scale(0.9)',
+                transformOrigin: 'top center',
+              }}
+            >
+              {trialExpired ? <TrialExpiredPage /> : children}
+            </div>
+          </div>
+
+          {/* Bottom Nav — hidden when trial expired */}
+          {!trialExpired && <BottomNav />}
+
+          {/* Trial Timer — floats inside the screen */}
+          {!trialExpired && <TrialTimer />}
         </div>
-
-        {/* Bottom Nav — hidden when trial expired */}
-        {!trialExpired && <BottomNav />}
-
-        {/* Trial Timer — floats over everything */}
-        {!trialExpired && <TrialTimer />}
       </div>
 
       <style>
