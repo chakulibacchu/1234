@@ -165,7 +165,7 @@ const APP_SLIDES = [
 
   function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
     const [current, setCurrent] = useState(0);
-  
+    const [showIntro, setShowIntro] = useState(false);
     const goTo = (idx: number) =>
       setCurrent(Math.max(0, Math.min(idx, APP_SLIDES.length - 1)));
   
@@ -288,40 +288,35 @@ const APP_SLIDES = [
         </AnimatePresence>
   
         <motion.div
-          className="w-full max-w-xs text-center"
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          {isLast ? (
-            <>
-              <p className="text-slate-500 text-xs mb-3">
-                🔒 Closed beta — grab your spot before it fills up
-              </p>
-              <button
-                onClick={onContinue}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
-              >
-                Join Closed Beta →
-              </button>
-
-              <button onClick={() => {startTrial();}}>
-                TEST: Open Preview
-              </button>
-
-              <p className="text-slate-600 text-xs mt-3">
-                Your plan is already saved — don't lose access to it
-              </p>
-            </>
-          ) : (
-            <button
-              onClick={() => goTo(current + 1)}
-              className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white font-semibold text-sm hover:bg-white/15 transition-colors"
-            >
-              Next →
-            </button>
-          )}
-        </motion.div>
+  className="w-full max-w-xs text-center"
+  initial={{ opacity: 0, y: 18 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3 }}
+>
+  {isLast ? (
+    <>
+      <p className="text-slate-500 text-xs mb-3">
+        🔒 Closed beta — grab your spot before it fills up
+      </p>
+      <button
+        onClick={() => setShowIntro(true)}
+        className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
+      >
+  Join Closed Beta →
+</button>
+      <p className="text-slate-600 text-xs mt-3">
+        Your plan is already saved — don't lose access to it
+      </p>
+    </>
+  ) : (
+    <button
+      onClick={() => goTo(current + 1)}
+      className="w-full py-3 rounded-2xl bg-white/10 border border-white/20 text-white font-semibold text-sm hover:bg-white/15 transition-colors"
+    >
+      Next →
+    </button>
+  )}
+</motion.div>
       </motion.div>
     );
   }
@@ -1457,29 +1452,29 @@ setTimeout(() => setToast(null), 3500);
 
        {/* App Preview Screen */}
 {/* Trial Intro Screen — shows first */}
-      <AnimatePresence>
-        {showTrialIntro && (
-          <TrialIntroScreen
-            onContinue={() => {
-
-              setShowTrialIntro(false);
-              setShowAppPreview(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* App Preview Screen — shows after trial intro */}
+      {/* App Preview Screen — shows first */}
       <AnimatePresence>
         {showAppPreview && (
           <AppPreviewScreen
             onContinue={() => {
-              setShowAppPreview(false);
-              navigate('/dashboard', { replace: true });
+             setShowAppPreview(false);
+             setShowTrialIntro(true);
             }}
           />
         )}
       </AnimatePresence>
+
+{/* Trial Intro Screen — shows after, then starts trial */}
+<AnimatePresence>
+  {showTrialIntro && (
+    <TrialIntroScreen
+      onContinue={() => {
+        startTrial();
+        window.location.href = '/trial';
+      }}
+    />
+  )}
+</AnimatePresence>
       </React.Fragment>
     );
   }
