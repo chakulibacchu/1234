@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Profileplan from "../../../components/08";
 
 // ─── Google Fonts ──────────────────────────────────────────────────────────────
 const FontLoader = () => (
@@ -986,6 +987,11 @@ export default function ProfileView() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </motion.div>
+
+          {/* Profile Plan */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Profileplan />
           </motion.div>
 
           {/* Stats */}
