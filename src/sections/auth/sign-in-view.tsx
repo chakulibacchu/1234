@@ -87,81 +87,84 @@ const APP_SLIDES = [
 ];
 
 
-  function TrialIntroScreen({ onContinue }: { onContinue: () => void }) {
-    return (
+ function TrialIntroScreen({ onContinue }: { onContinue: () => void }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[9998] flex flex-col items-center justify-center px-6 overflow-hidden"
+      style={{ background: "linear-gradient(135deg, #0f0a1e 0%, #1a0a2e 50%, #0d1a3a 100%)" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      {/* Glow blobs */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/3 w-48 h-48 bg-pink-600/15 rounded-full blur-3xl pointer-events-none" />
+
       <motion.div
-        className="fixed inset-0 z-[9998] flex flex-col items-center justify-center px-6 overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #0f0a1e 0%, #1a0a2e 50%, #0d1a3a 100%)" }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.4 }}
+        className="relative z-10 flex flex-col items-center text-center max-w-sm"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, duration: 0.5 }}
       >
-        {/* Glow blobs */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 left-1/3 w-48 h-48 bg-pink-600/15 rounded-full blur-3xl pointer-events-none" />
+        {/* Icon */}
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6 shadow-2xl shadow-purple-700/40">
+          <span className="text-4xl">🚀</span>
+        </div>
 
-        <motion.div
-          className="relative z-10 flex flex-col items-center text-center max-w-sm"
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.5 }}
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-400/30 rounded-full px-4 py-1.5 mb-5">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-purple-200 text-xs font-semibold tracking-widest uppercase">
+            Early Access — Closed Beta
+          </span>
+        </div>
+
+        {/* Heading */}
+        <h2 className="text-3xl font-extrabold text-white leading-tight mb-3">
+          Try the app first
+          <br />
+          <span className="bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+            see how it works
+          </span>
+        </h2>
+
+        {/* Description */}
+        <p className="text-slate-400 text-sm leading-relaxed mb-8">
+          Take a quick look inside and experience how everything works — your plan, practice system, and progress tools. If you like it, you can continue right where you left off.
+        </p>
+
+        {/* What you get */}
+        <div className="w-full space-y-2 mb-8">
+          {[
+            { e: "🎯", t: "Build your personalized 5-day plan" },
+            { e: "💬", t: "Practice real conversations with AI" },
+            { e: "📈", t: "Track your progress as you go" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-left">
+              <span className="text-lg">{item.e}</span>
+              <span className="text-slate-300 text-sm">{item.t}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA */}
+        <button
+          onClick={onContinue}
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
         >
-          {/* Icon */}
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6 shadow-2xl shadow-purple-700/40">
-            <span className="text-4xl">🚀</span>
-          </div>
+          Start Exploring →
+        </button>
 
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-400/30 rounded-full px-4 py-1.5 mb-5">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-purple-200 text-xs font-semibold tracking-widest uppercase">
-              Closed Beta — Limited Spots
-            </span>
-          </div>
-
-          {/* Heading */}
-          <h2 className="text-3xl font-extrabold text-white leading-tight mb-3">
-            Explore the app
-            <br />
-            <span className="bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
-              free for 2 minutes
-            </span>
-          </h2>
-
-          <p className="text-slate-400 text-sm leading-relaxed mb-8">
-            We're giving you a full preview of everything inside — no strings attached. After 2 mins, we'll ask if you want to join the closed beta and keep your progress.
-          </p>
-
-          {/* What you get */}
-          <div className="w-full space-y-2 mb-8">
-            {[
-              { e: "🎯", t: "Your personalized 5-day plan" },
-              { e: "💬", t: "AI conversation practice" },
-              { e: "📈", t: "Progress tracking & streaks" },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-left">
-                <span className="text-lg">{item.e}</span>
-                <span className="text-slate-300 text-sm">{item.t}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <button
-            onClick={onContinue}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-extrabold text-base shadow-2xl shadow-purple-700/40 hover:scale-[1.03] active:scale-[0.98] transition-transform"
-          >
-            Start My 2-Min Preview →
-          </button>
-
-          <p className="text-slate-600 text-xs mt-4">
-            No credit card. No commitment. Just a look inside.
-          </p>
-        </motion.div>
+        {/* Footer */}
+        <p className="text-slate-600 text-xs mt-4">
+          Jump in and try it out — no setup needed.
+        </p>
       </motion.div>
-    );
-  }
+    </motion.div>
+  );
+}
+
 
   function AppPreviewScreen({ onContinue }: { onContinue: () => void }) {
     const [current, setCurrent] = useState(0);
