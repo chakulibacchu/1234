@@ -319,20 +319,60 @@ const initSessionSilent = (id: string) => {
 };
 
 
+const submitAndPoll = async (phaseNum: number, formData: any, apiKey: string) => {
+  const res = await fetch(`${API_BASE}/submit-phase-data`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      phase: phaseNum,
+      form_data: formData,
+      api_key: apiKey
+    })
+  });
 
- const submitPhase1 = async (e) => {
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`HTTP ${res.status} — ${txt}`);
+  }
+
+  const { job_id } = await res.json();
+  if (!job_id) throw new Error("No job_id returned from server");
+
+  const maxAttempts = 120;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    let pollRes: Response;
+    try {
+      pollRes = await fetch(`${API_BASE}/job-status/${job_id}`);
+    } catch { continue; }
+    if (!pollRes.ok) continue;
+    const job = await pollRes.json();
+    if (job.status === "done") {
+      return {
+        response: job.message,
+        ready_for_next_phase: !!job.next_phase && job.next_phase !== phaseNum,
+        phase: job.next_phase,
+        task_overview: job.task_overview
+      };
+    }
+    if (job.status === "error") throw new Error(job.error || "Job failed");
+  }
+  throw new Error("Timed out waiting for Jordan's response. Please try again.");
+};
+
+
+const submitPhase1 = async (e?) => {
   e?.preventDefault?.();
   setLoading(true);
   setErrorText(null);
 
   try {
-    // ── 1. Guard: userId ──────────────────────────────────────────
     if (!userId) {
       pushBotMessage("⚠️ Still loading your account. Wait a second and try again.");
       return;
     }
 
-    // ── 2. Guard: API key ─────────────────────────────────────────
     let apiKey = "";
     try {
       const keys = await getApiKeys();
@@ -347,194 +387,112 @@ const initSessionSilent = (id: string) => {
       return;
     }
 
-    // ── 3. Guard: form data ───────────────────────────────────────
     const { main_problem, where_happens, how_feels, impact } = phase1Data;
     if (!main_problem || !where_happens || !how_feels || !impact) {
       pushBotMessage("⚠️ Please answer all questions before submitting.");
       return;
     }
 
-    // ── 4. Log what we're sending ─────────────────────────────────
-    console.log("📤 Phase 1 submit", { userId, apiKey, phase1Data });
-
     const submissionSummary = `Problem: ${main_problem}\nWhere: ${where_happens}\nFeeling: ${how_feels}\nImpact: ${impact}`;
     pushUserMessage(submissionSummary);
 
-    // ── 5. Fetch with timeout ─────────────────────────────────────
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const data = await submitAndPoll(1, phase1Data, apiKey);
 
-    let res: Response;
-    try {
-      res = await fetch(`${API_BASE}/submit-phase-data`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          phase: 1,
-          form_data: phase1Data,
-          api_key: apiKey
-        }),
-        signal: controller.signal
-      });
-    } catch (fetchErr: any) {
-      if (fetchErr?.name === "AbortError") {
-        pushBotMessage("⚠️ Request timed out. Backend might be slow — try again.");
-      } else {
-        pushBotMessage(`⚠️ Network error: ${fetchErr?.message}`);
-      }
-      return;
-    } finally {
-      clearTimeout(timeout);
-    }
+    if (data.response) pushBotMessage(data.response);
+    else pushBotMessage("Got it! Moving to Phase 2.");
 
-    // ── 6. Handle non-OK responses ────────────────────────────────
-    if (!res.ok) {
-      const txt = await res.text();
-      console.error("❌ Backend error:", res.status, txt);
-      pushBotMessage(`⚠️ Server error ${res.status}: ${txt}`);
-      return;
-    }
-
-    // ── 7. Parse response ─────────────────────────────────────────
-    let data: any;
-    try {
-      data = await res.json();
-    } catch {
-      pushBotMessage("⚠️ Got a bad response from server. Try again.");
-      return;
-    }
-
-    console.log("✅ Phase 1 response:", data);
-
-    // ── 8. Show Jordan's reply ────────────────────────────────────
-    if (data.response) {
-      pushBotMessage(data.response);
-    } else {
-      pushBotMessage("Got it! Moving to Phase 2.");
-    }
-
-    // ── 9. Advance phase ──────────────────────────────────────────
     if (data.ready_for_next_phase && data.phase) {
-      console.log(`✅ Advancing to phase ${data.phase}`);
       setPhase(data.phase);
     }
 
+  } catch (err: any) {
+    console.error("❌ Phase 1 error:", err);
+    setErrorText(String(err?.message || err));
+    pushBotMessage(`⚠️ Error: ${String(err?.message || err)}`);
   } finally {
     setLoading(false);
   }
 };
 
 
-
-const submitPhase2 = async (e) => {
+const submitPhase2 = async (e?) => {
   e?.preventDefault?.();
   setLoading(true);
   setErrorText(null);
-  
+
   try {
-    const apiKeys = await getApiKeys();
-    const apiKey = apiKeys[apiKeys.length - 1];
+    const keys = await getApiKeys();
+    const apiKey = keys[keys.length - 1];
+
+    if (!apiKey) {
+      pushBotMessage("⚠️ API key is empty. Check your settings.");
+      return;
+    }
 
     const submissionSummary = `Past attempts: ${phase2Data.past_attempts}\nSkills: Eye contact=${phase2Data.skill_assessment.eye_contact}, Small talk=${phase2Data.skill_assessment.small_talk}\nStruggle: ${phase2Data.biggest_struggle}`;
     pushUserMessage(submissionSummary);
 
-    console.log("📤 Submitting Phase 2:", phase2Data);
+    const data = await submitAndPoll(2, phase2Data, apiKey);
 
-    const res = await fetch(`${API_BASE}/submit-phase-data`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        phase: 2,
-        form_data: phase2Data,
-        api_key: apiKey
-      })
-    });
+    if (data.response) pushBotMessage(data.response);
+    if (data.ready_for_next_phase) setPhase(data.phase || 3);
 
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`HTTP ${res.status} — ${txt}`);
-    }
-
-    const data = await res.json();
-    console.log("✅ Phase 2 response:", data);
-    
-    if (data.response) {
-      pushBotMessage(data.response);
-    }
-    
-    if (data.ready_for_next_phase) {
-      setPhase(data.phase || 3);
-    }
-  } catch (err) {
-    console.error("❌ Submit error:", err);
+  } catch (err: any) {
+    console.error("❌ Phase 2 error:", err);
     setErrorText(String(err?.message || err));
-    pushBotMessage(`⚠️ Submit error: ${String(err?.message || err)}`);
+    pushBotMessage(`⚠️ Error: ${String(err?.message || err)}`);
   } finally {
     setLoading(false);
   }
 };
 
-const submitPhase3 = async (e) => {
+
+const submitPhase3 = async (e?) => {
   e?.preventDefault?.();
   setLoading(true);
   setErrorText(null);
-  
+
   try {
-    const apiKeys = await getApiKeys();
-    const apiKey = apiKeys[apiKeys.length - 1];
+    const keys = await getApiKeys();
+    const apiKey = keys[keys.length - 1];
+
+    if (!apiKey) {
+      pushBotMessage("⚠️ API key is empty. Check your settings.");
+      return;
+    }
 
     const locationsList = phase3Data.practice_locations.filter(l => l.trim());
     const submissionSummary = `Locations: ${locationsList.join(", ")}\nTimes: ${phase3Data.available_times}\nCommitment: ${phase3Data.commitment_level}/10\nTop anxiety: ${phase3Data.top_anxiety}`;
     pushUserMessage(submissionSummary);
 
-    console.log("📤 Submitting Phase 3:", phase3Data);
+    const data = await submitAndPoll(3, phase3Data, apiKey);
 
-    const res = await fetch(`${API_BASE}/submit-phase-data`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        phase: 3,
-        form_data: phase3Data,
-        api_key: apiKey
-      })
-    });
+    if (data.response) pushBotMessage(data.response);
+    if (data.ready_for_next_phase) setPhase(data.phase || 4);
 
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`HTTP ${res.status} — ${txt}`);
-    }
-
-    const data = await res.json();
-    console.log("✅ Phase 3 response:", data);
-    
-    if (data.response) {
-      pushBotMessage(data.response);
-    }
-    
-    if (data.ready_for_next_phase) {
-      setPhase(data.phase || 4);
-    }
-  } catch (err) {
-    console.error("❌ Submit error:", err);
+  } catch (err: any) {
+    console.error("❌ Phase 3 error:", err);
     setErrorText(String(err?.message || err));
-    pushBotMessage(`⚠️ Submit error: ${String(err?.message || err)}`);
+    pushBotMessage(`⚠️ Error: ${String(err?.message || err)}`);
   } finally {
     setLoading(false);
   }
 };
 
-const submitPhase4 = async (e) => {
+
+const submitPhase4 = async (e?) => {
   e?.preventDefault?.();
   setLoading(true);
   setErrorText(null);
-  
+
   try {
-    // Transform phase4Data to match backend expectations
-    const apiKeys = await getApiKeys();
-    const apiKey = apiKeys[apiKeys.length - 1];
+    const keys = await getApiKeys();
+    const apiKey = keys[keys.length - 1];
+
+    if (!apiKey) {
+      pushBotMessage("⚠️ API key is empty. Check your settings.");
+      return;
+    }
 
     const transformedData = {
       ...phase4Data,
@@ -596,49 +554,24 @@ const submitPhase4 = async (e) => {
     const submissionSummary = `Schedule: Detailed weekly breakdown\nSocial touchpoints: ${transformedData.existing_social_touchpoints.join(", ")}\nStress peaks: ${transformedData.stress_peaks.join(", ")}`;
     pushUserMessage(submissionSummary);
 
-    console.log("📤 Submitting Phase 4:", transformedData);
-    console.log("🆔 User ID being sent:", userId);
+    const data = await submitAndPoll(4, transformedData, apiKey);
 
-    const res = await fetch(`${API_BASE}/submit-phase-data`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        phase: 4,
-        form_data: transformedData,
-        api_key: apiKey
-      })
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`HTTP ${res.status} — ${txt}`);
-    }
-
-    const data = await res.json();
-    console.log("✅ Phase 4 response:", data);
-    
-    if (data.response) {
-      pushBotMessage(data.response);
-    }
-    
+    if (data.response) pushBotMessage(data.response);
     if (data.ready_for_next_phase) {
       setPhase(data.phase || 5);
       pushBotMessage("Ready for confirmation. Review everything and let me know if it looks good or if you want to change anything.");
     }
+    if (data.task_overview) setTaskOverview(data.task_overview);
 
-    if (data.task_overview) {
-      setTaskOverview(data.task_overview);
-    }
-    
-  } catch (err) {
-    console.error("❌ Submit error:", err);
+  } catch (err: any) {
+    console.error("❌ Phase 4 error:", err);
     setErrorText(String(err?.message || err));
-    pushBotMessage(`⚠️ Submit error: ${String(err?.message || err)}`);
+    pushBotMessage(`⚠️ Error: ${String(err?.message || err)}`);
   } finally {
     setLoading(false);
   }
 };
+
 
 
 const sendChatMessage = async () => {
