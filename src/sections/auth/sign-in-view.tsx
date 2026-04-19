@@ -1355,7 +1355,10 @@ setTimeout(() => setToast(null), 3500);
                 {/* Skip Button */}
                 <div className="flex justify-center mt-8">
                   <Button
-                    onClick={() => setCurrentPage(currentPage + 1)}
+                    onClick={() => {
+                      startTrial();
+                      window.location.href = '/trial';
+                    }}
                     variant="ghost"
                     className="text-slate-400 hover:text-white hover:bg-white/10"
                   >
