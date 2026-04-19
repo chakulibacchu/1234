@@ -426,34 +426,9 @@ useEffect(() => {
 
 
 
-// NEW CODE - REPLACE WITH THIS:
-useEffect(() => {
-  // ✅ Only trigger for TOPIC MODULES
-  const hasCompletedTopicModule = lessons.some(
-    lesson => lesson.isTopicModule === true && lesson.completed === true
-  );
-  
-  if (hasCompletedTopicModule && !localStorage.getItem('mentor_journey_after-lesson_completed')) {
-    console.log('🎯 Topic module completed - starting after-lesson journey');
-    setTimeout(() => {
-      startJourney(mentorScriptAfterLesson, 'after-lesson');
-    }, 1000);
-  }
-}, [lessons]);
 
 
-// CONSOLIDATE INTO ONE SMART SYSTEM
-useEffect(() => {
-  const completedBeforeLesson = localStorage.getItem('mentor_before_lesson_completed');
-  const completedAfterLesson = localStorage.getItem('mentor_after_lesson_completed');
-  const hasCompletedFirstLesson = false;
-  
-  if (!completedBeforeLesson && !useMentorStore.getState().active) {
-    console.log("dsd")
-  } else if (hasCompletedFirstLesson && !completedAfterLesson && !useMentorStore.getState().active) {
-    startJourney(mentorScriptAfterLesson);
-  }
-}, []); // Runs once on mount
+
 
 useEffect(() => {
     // 1. Check if progress data is available and day 1 is complete.
@@ -1233,17 +1208,7 @@ const handleCompleteLesson = async () => {
       completionPercentage: 100
     });
 
-    // ✅ Trigger mentor journey IF this is a topic module
-    if (selectedLesson.isTopicModule) {
-      const { isJourneyCompleted, startJourney } =
-        useMentorStore.getState();
-
-      if (!localStorage.getItem('mentor_journey_after-lesson_completed')) {
-        setTimeout(() => {
-          startJourney(mentorScriptAfterLesson, 'after-lesson');
-        }, 2000);
-      }
-    }
+   
 
     // ✅ Update user state AFTER logic
     await loadUserData();
@@ -2983,8 +2948,6 @@ useEffect(() => {
     
     // ✅ START AFTER-LESSON JOURNEY
     console.log('🚀 Starting after-lesson journey...');
-    const { startJourney } = useMentorStore.getState();
-    startJourney(mentorScriptAfterLesson);
     
     return; // Exit early
   }
