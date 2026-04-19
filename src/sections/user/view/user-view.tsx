@@ -3076,23 +3076,40 @@ if (userData.isTopicModule) {
   
   
   return (
-    <>
-      {typeof window !== "undefined" &&
-        ReactDOM.createPortal(
-          <div 
-            data-portal-active="true"
-            className="fixed inset-0 bg-slate-900 overflow-y-auto z-[10002]"
+  <>
+    {typeof window !== "undefined" &&
+      ReactDOM.createPortal(
+        <div
+          data-portal-active="true"
+          className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl"
+            style={{ height: '90vh' }}
           >
-            <ModuleComponent 
-              lessonContent={userData} 
-              onCompleteNavigator={handleRouterComplete}
-              onBackToTimeline={onBackToTimeline}
-            />
-          </div>,
-          document.body
-        )}
-    </>
-  );
+            {/* Close button */}
+            <button
+              onClick={onBackToTimeline}
+              className="absolute top-3 right-3 z-10 bg-black/40 hover:bg-black/60 text-white rounded-full p-1.5 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Scrollable module content */}
+            <div className="w-full h-full overflow-y-auto bg-slate-900">
+              <ModuleComponent
+                lessonContent={userData}
+                onCompleteNavigator={handleRouterComplete}
+                onBackToTimeline={onBackToTimeline}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+  </>
+);
+
 }
 
 
