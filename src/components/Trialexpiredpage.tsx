@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { auth } from '../firebase';
 
 async function notifyTester(email: string): Promise<boolean> {
   const MAX_ATTEMPTS = 10;
