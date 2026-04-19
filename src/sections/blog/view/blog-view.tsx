@@ -1522,15 +1522,6 @@ Check In After Activity
   <p className="text-sm text-purple-300">Challenge anxious thoughts</p>
 </button>
 
-<button
-  onClick={() => setShowDiscovery(true)}
-  data-tour="discover-button"
-  className="p-5 bg-gradient-to-br from-green-800/60 to-green-900/60 hover:from-green-700/60 hover:to-green-800/60 rounded-2xl border-2 border-green-500/30 transition-all shadow-xl hover:shadow-2xl"
->
-  <Search className="w-8 h-8 text-green-400 mb-2" />
-  <h3 className="font-bold text-white mb-1">Discover Activities</h3>
-  <p className="text-sm text-green-300">Find anxiety-friendly options</p>
-</button>
 
 
 </div>
@@ -2984,55 +2975,6 @@ I Feel Better Now
 )}
 
 {/* DISCOVERY MODAL */}
-{showDiscovery && (
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-<div className="bg-gradient-to-br from-purple-900/95 to-pink-900/95 backdrop-blur-xl p-6 rounded-3xl border-2 border-purple-500/50 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-<div className="flex items-center justify-between mb-6">
-<h2 className="text-2xl font-bold text-white">Discover Activities</h2>
-<button onClick={() => (false)} className="p-2 hover:bg-purple-800/50 rounded-lg">
-<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-</svg>
-</button>
-</div>
-
-<p className="text-purple-200 mb-6">Find activities perfect for task-focused socializing</p>
-
-<div className="space-y-4">
-{ACTIVITY_CATEGORIES.map((category, idx) => (
-<div key={idx} className="bg-purple-950/50 rounded-2xl p-5 border-2 border-purple-700/30">
-<div className="flex items-start gap-3 mb-3">
-<span className="text-4xl">{category.icon}</span>
-<div className="flex-1">
-<h3 className="text-xl font-bold text-white mb-1">{category.name}</h3>
-<p className="text-sm text-purple-300 mb-3">{category.description}</p>
-
-<div className="grid grid-cols-2 gap-2 mb-3">
-<div className="bg-purple-900/30 rounded-lg p-2">
-<p className="text-xs text-purple-400">Anxiety Rating</p>
-<p className="text-sm font-bold text-white">{category.anxietyRating}</p>
-</div>
-<div className="bg-purple-900/30 rounded-lg p-2">
-<p className="text-xs text-purple-400">Social Style</p>
-<p className="text-sm font-bold text-white">{category.socialStyle.split(' ')[0]}</p>
-</div>
-</div>
-
-<div className="flex flex-wrap gap-2">
-{category.examples.map((example, i) => (
-<span key={i} className="px-2 py-1 bg-purple-800/50 rounded-lg text-xs text-purple-200">
-{example}
-</span>
-))}
-</div>
-</div>
-</div>
-</div>
-))}
-</div>
-</div>
-</div>
-)}
 
 {/* INTERACTION PLANNER MODAL */}
 

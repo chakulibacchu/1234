@@ -54,7 +54,7 @@ import MiniTaskTracker from 'src/components/tasktrackersmall';
 import { runStyledOverviewTour } from './joyride'; // adjust path if needed
 import EyeContactTrainer from 'src/components/07';
 import Day1Navigator from "src/components/DAY_01/MAINNAVIGATOR";
-
+import DailyHub from 'src/components/09';
 
 const randomIndex = Math.floor(Math.random() * avatars.length);
 const selectedAvatar = avatars[randomIndex];
@@ -390,7 +390,12 @@ if (currentUser) {
             {/* ── Main Content Grid ── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
+
+              <DailyHub />
+              
               <TransformationCard />
+
+              
 
               {/* Left Column */}
               <div className="lg:col-span-2 space-y-8">

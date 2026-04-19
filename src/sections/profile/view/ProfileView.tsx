@@ -518,6 +518,687 @@ function CourageGraph({ weekData }) {
   );
 }
 
+function getLoggedDays(weekData) {
+  return weekData.filter((d) => d.preLevel !== null);
+}
+
+function getAverageDrop(loggedDays) {
+  const drops = loggedDays
+    .filter((d) => d.postLevel !== null)
+    .map((d) => d.preLevel - d.postLevel);
+  if (!drops.length) return null;
+  return (drops.reduce((sum, value) => sum + value, 0) / drops.length).toFixed(1);
+}
+
+function getTopTriggerEntries(weekData) {
+  const counts = {};
+  weekData.forEach((day) => {
+    day.triggers.forEach((trigger) => {
+      counts[trigger] = (counts[trigger] || 0) + 1;
+    });
+  });
+
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([name, count]) => ({ name, count }));
+}
+
+function getSuggestedReset(level) {
+  if (level <= 3) {
+    return {
+      label: "Steady enough to stretch",
+      action: "Send one low-pressure message or ask one simple question today.",
+      color: "#4ade80",
+    };
+  }
+  if (level <= 6) {
+    return {
+      label: "Regulate, then engage",
+      action: "Do one minute of box breathing, then take one tiny social action within the hour.",
+      color: "#fbbf24",
+    };
+  }
+  return {
+    label: "Safety first, then a micro-step",
+    action: "Ground with breath or cold water, then lower the goal to eye contact, a wave, or one sentence.",
+    color: "#f87171",
+  };
+}
+
+// ── Anxiety Education Cards (science-backed knowledge bites) ──────────────
+const ANXIETY_SCIENCE_CARDS = [
+  {
+    id: "window",
+    icon: "🧠",
+    title: "Window of Tolerance",
+    color: "#c084fc",
+    short: "Your nervous system has a sweet spot for growth.",
+    full: "When anxiety is too low, you're not challenged. When it's too high, you freeze. The sweet spot in between — your 'window of tolerance' — is where real social growth happens. Your goal isn't zero anxiety. It's learning to act inside your window.",
+    actionPrompt: "Rate where you feel you are right now:",
+    actionLabels: ["Too low (bored)", "In the window ✓", "Too high (frozen)"],
+  },
+  {
+    id: "amygdala",
+    icon: "⚡",
+    title: "The Amygdala Hijack",
+    color: "#f472b6",
+    short: "Your brain's alarm is louder than it needs to be.",
+    full: "Social anxiety fires the same brain alarm as physical danger. Your amygdala can't always tell the difference between a saber-tooth tiger and an awkward conversation. But every time you act despite the alarm, you literally train it to fire less.",
+    actionPrompt: "How many times did you act despite the alarm this week?",
+    actionLabels: ["0 — this is new info", "1–2 times", "3+ times 🔥"],
+  },
+  {
+    id: "habituation",
+    icon: "📉",
+    title: "Habituation",
+    color: "#4ade80",
+    short: "Anxiety always drops if you stay in the moment long enough.",
+    full: "Anxiety is not permanent. Research shows it peaks within 10 minutes and drops on its own — even if you do nothing. Avoidance breaks this cycle. Staying through the discomfort teaches your brain: 'I survived. This isn't dangerous.'",
+    actionPrompt: "Did you notice anxiety drop after staying in a situation?",
+    actionLabels: ["Not yet", "Once or twice", "Yes, clearly"],
+  },
+  {
+    id: "self-compassion",
+    icon: "💜",
+    title: "Self-Compassion > Self-Criticism",
+    color: "#fbbf24",
+    short: "Being hard on yourself makes anxiety worse, not better.",
+    full: "Studies show self-criticism activates the same threat response as social danger. People who practice self-compassion recover from anxious moments faster and take more social risks. Treating yourself kindly is a performance strategy, not weakness.",
+    actionPrompt: "What is your inner voice usually like after a hard social moment?",
+    actionLabels: ["Harsh critic", "Mixed", "Pretty kind"],
+  },
+];
+
+const TRIGGER_PLAYBOOK_EXTENDED = {
+  "social event": {
+    title: "Before a social event",
+    icon: "🎉",
+    microAction: "Arrive 5 minutes early and find one safe anchor point — the drinks table, a wall edge, or the host.",
+    reframe: "You don't need to impress everyone. You only need one grounded first minute.",
+    scienceNote: "Anticipatory anxiety peaks before the event — the moment you walk in, it drops. Your brain is lying about how bad it will be.",
+  },
+  "group setting": {
+    title: "In a group setting",
+    icon: "👥",
+    microAction: "Use one bridge question: 'How do you know everyone here?' or 'What brought you here today?'",
+    reframe: "Groups feel fast because your brain is scanning for danger. Slow the moment down with one simple question.",
+    scienceNote: "Asking questions shifts your focus outward — the single fastest way to reduce self-monitoring anxiety.",
+  },
+  "new people": {
+    title: "Meeting new people",
+    icon: "🤝",
+    microAction: "Focus on their name plus one follow-up question instead of thinking about your own performance.",
+    reframe: "Curiosity lowers pressure better than trying to be interesting.",
+    scienceNote: "People remember how you made them feel, not what you said. Genuine interest is your most powerful social tool.",
+  },
+  "phone call": {
+    title: "Before a phone call",
+    icon: "📞",
+    microAction: "Write three bullets: why you're calling, one question, one close-out sentence.",
+    reframe: "A structured call is easier on your nervous system than improvising everything.",
+    scienceNote: "Having a script reduces working memory load, freeing cognitive resources to actually listen.",
+  },
+  "work stress": {
+    title: "When work stress spills socially",
+    icon: "💼",
+    microAction: "Take one 90-second reset before replying or joining a conversation.",
+    reframe: "Stress makes connection feel heavier than it is. Reset first, then engage.",
+    scienceNote: "Stress hormones from unrelated sources amplify social anxiety. A brief reset can literally clear the bloodstream.",
+  },
+  default: {
+    title: "When anxiety spikes",
+    icon: "🌊",
+    microAction: "Name the moment, rate it out of 10, then take one tiny outward action within 5 minutes.",
+    reframe: "Relief comes faster when you pair awareness with a small action.",
+    scienceNote: "Labeling an emotion ('I feel anxious') reduces amygdala activation. Naming it is already doing something.",
+  },
+};
+
+const MICRO_CHALLENGES = [
+  { id: "mc1", icon: "👋", title: "The Wave", desc: "Wave or nod at one person you'd normally avoid eye contact with.", xp: 10, difficulty: "Beginner" },
+  { id: "mc2", icon: "💬", title: "One Sentence", desc: "Say one sentence to someone you don't normally talk to.", xp: 20, difficulty: "Easy" },
+  { id: "mc3", icon: "❓", title: "Ask It", desc: "Ask one genuine question in a group conversation.", xp: 30, difficulty: "Medium" },
+  { id: "mc4", icon: "📱", title: "The Call", desc: "Make one phone call instead of texting.", xp: 40, difficulty: "Medium" },
+  { id: "mc5", icon: "🙋", title: "Volunteer", desc: "Volunteer to speak first or go next in any group setting.", xp: 60, difficulty: "Hard" },
+  { id: "mc6", icon: "🎯", title: "Cold Start", desc: "Start a conversation with a complete stranger.", xp: 80, difficulty: "Hard" },
+];
+
+function AnxietySupportHub({ weekData, onLogNow, onReviewDay }) {
+  const [focus, setFocus] = useState("pattern");
+  const [expandedCard, setExpandedCard] = useState(null);
+  const [cardResponses, setCardResponses] = useState({});
+  const [completedChallenges, setCompletedChallenges] = useState([]);
+  const [challengeFeedback, setChallengeFeedback] = useState(null);
+  const [activeTriggerKey, setActiveTriggerKey] = useState("default");
+
+  const loggedDays = getLoggedDays(weekData);
+  const avgPre = loggedDays.length
+    ? (loggedDays.reduce((sum, day) => sum + day.preLevel, 0) / loggedDays.length).toFixed(1)
+    : null;
+  const avgDrop = getAverageDrop(loggedDays);
+  const actionDays = loggedDays.filter((day) => day.actionTaken).length;
+  const topTriggers = getTopTriggerEntries(weekData);
+  const recoveryWins = loggedDays.filter((day) => day.postLevel !== null && day.postLevel < day.preLevel).length;
+  const today = weekData[4];
+  const currentLevel = today.preLevel ?? (avgPre ? Math.round(parseFloat(avgPre)) : 5);
+  const resetPlan = getSuggestedReset(currentLevel);
+
+  const totalXP = completedChallenges.reduce((sum, id) => {
+    const ch = MICRO_CHALLENGES.find(c => c.id === id);
+    return sum + (ch?.xp ?? 0);
+  }, 0);
+
+  const handleCardResponse = (cardId, responseIdx) => {
+    setCardResponses(prev => ({ ...prev, [cardId]: responseIdx }));
+  };
+
+  const handleCompleteChallenge = (id) => {
+    if (completedChallenges.includes(id)) return;
+    setCompletedChallenges(prev => [...prev, id]);
+    const ch = MICRO_CHALLENGES.find(c => c.id === id);
+    setChallengeFeedback(`+${ch.xp} XP — ${ch.title} complete! 🔥`);
+    setTimeout(() => setChallengeFeedback(null), 2500);
+  };
+
+  const difficultyColor = { Beginner: "#4ade80", Easy: "#a3e635", Medium: "#fbbf24", Hard: "#f87171" };
+
+  const activeTrigger = topTriggers.length > 0
+    ? (activeTriggerKey === "default" ? topTriggers[0].name : activeTriggerKey)
+    : "default";
+  const triggerGuide = TRIGGER_PLAYBOOK_EXTENDED[activeTrigger] || TRIGGER_PLAYBOOK_EXTENDED.default;
+
+  return (
+    <div style={{ display: "grid", gap: "0.75rem" }}>
+      {/* Header Card */}
+      <div
+        className="glass-card"
+        style={{
+          padding: "1.25rem",
+          background: "linear-gradient(135deg, rgba(33,11,66,0.98) 0%, rgba(56,17,104,0.92) 55%, rgba(92,28,124,0.72) 100%)",
+          border: "1px solid rgba(216,180,254,0.24)",
+          boxShadow: "0 18px 48px rgba(64,18,122,0.32)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ position: "absolute", top: -40, right: -40, width: 140, height: 140, borderRadius: "50%", background: "rgba(236,72,153,0.08)", pointerEvents: "none" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.8rem", alignItems: "flex-start", marginBottom: "1rem", position: "relative" }}>
+          <div>
+            <div style={{ fontSize: "0.6rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#a78bfa", marginBottom: "0.35rem" }}>
+              Anxiety Support Hub
+            </div>
+            <div className="display" style={{ fontSize: "1.18rem", color: "white", lineHeight: 1.15 }}>
+              Your week, decoded
+            </div>
+            <div style={{ fontSize: "0.8rem", color: "#d8c8f8", lineHeight: 1.55, marginTop: "0.35rem" }}>
+              Patterns, science, challenges — tools you can use right now.
+            </div>
+          </div>
+          <button className="btn-secondary" onClick={onLogNow} style={{ padding: "0.6rem 0.95rem", flexShrink: 0 }}>
+            Log now
+          </button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "0.45rem" }}>
+          {[
+            { label: "Avg level", value: avgPre ? `${avgPre}` : "—", sub: "/10", color: avgPre ? getAnxietyColor(parseFloat(avgPre)) : "#a78bfa" },
+            { label: "Recovery wins", value: `${recoveryWins}`, sub: "", color: "#4ade80" },
+            { label: "Avg drop", value: avgDrop ? `${avgDrop}` : "—", sub: " pts", color: "#fbbf24" },
+            { label: "XP earned", value: `${totalXP}`, sub: "", color: "#f472b6" },
+          ].map((stat) => (
+            <div key={stat.label} style={{ padding: "0.75rem 0.5rem", borderRadius: "14px", background: "rgba(17,24,39,0.25)", border: "1px solid rgba(192,162,252,0.14)", textAlign: "center" }}>
+              <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: "1.05rem", fontWeight: 700, color: stat.color, lineHeight: 1 }}>
+                {stat.value}<span style={{ fontSize: "0.6rem", opacity: 0.7 }}>{stat.sub}</span>
+              </div>
+              <div style={{ fontSize: "0.58rem", color: "#b8a4de", letterSpacing: "0.07em", textTransform: "uppercase", marginTop: "0.2rem", lineHeight: 1.2 }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab Nav */}
+      <div style={{ display: "flex", gap: "0.3rem", overflowX: "auto", paddingBottom: "2px" }}>
+        {[
+          { id: "pattern", label: "📊 Patterns" },
+          { id: "science", label: "🧠 Science" },
+          { id: "triggers", label: "⚡ Triggers" },
+          { id: "challenges", label: "🎯 Challenges" },
+          { id: "reset", label: "🌊 Reset now" },
+        ].map((item) => (
+          <button
+            key={item.id}
+            className={`nav-tab ${focus === item.id ? "active" : ""}`}
+            onClick={() => setFocus(item.id)}
+            style={{ minWidth: "fit-content", fontSize: "0.65rem" }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {/* PATTERN TAB */}
+      {focus === "pattern" && (
+        <motion.div key="pattern" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="glass-card" style={{ padding: "1.35rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.85rem" }}>
+              <div>
+                <div className="display" style={{ fontSize: "1.05rem", color: "white", marginBottom: "0.25rem" }}>Your anxiety curve</div>
+                <div style={{ fontSize: "0.78rem", color: "#b8a4de", lineHeight: 1.6 }}>
+                  Purple = before. Green = after action. Tap a day to review it.
+                </div>
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "#4ade80", fontWeight: 700, background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: "8px", padding: "0.3rem 0.6rem", whiteSpace: "nowrap" }}>
+                {actionDays} action {actionDays === 1 ? "day" : "days"}
+              </div>
+            </div>
+
+            <CourageGraph weekData={weekData} />
+
+            <div style={{ display: "flex", gap: "0.4rem", marginTop: "1.1rem" }}>
+              {weekData.map((day, idx) => {
+                const logged = day.preLevel !== null;
+                const delta = day.postLevel !== null ? day.preLevel - day.postLevel : null;
+                return (
+                  <button key={idx} onClick={() => onReviewDay(idx)} style={{
+                    flex: 1, padding: "0.65rem 0.4rem", borderRadius: "12px", border: "1px solid",
+                    borderColor: logged ? "rgba(192,162,252,0.25)" : "rgba(192,162,252,0.1)",
+                    background: logged ? "rgba(124,58,237,0.12)" : "rgba(124,58,237,0.04)",
+                    cursor: "pointer", color: "inherit", textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: "0.6rem", fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: logged ? "#c084fc" : "#4b5563", letterSpacing: "0.08em" }}>{day.day}</div>
+                    {logged ? (
+                      <>
+                        <div style={{ fontSize: "0.85rem", fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: getAnxietyColor(day.preLevel), marginTop: "0.2rem" }}>{day.preLevel}</div>
+                        {delta !== null && (
+                          <div style={{ fontSize: "0.6rem", color: delta > 0 ? "#4ade80" : "#f87171", marginTop: "0.1rem" }}>
+                            {delta > 0 ? `↓${delta}` : `↑${Math.abs(delta)}`}
+                          </div>
+                        )}
+                        {day.actionTaken && <div style={{ fontSize: "0.55rem", color: "#4ade80", marginTop: "0.1rem" }}>✓</div>}
+                      </>
+                    ) : (
+                      <div style={{ fontSize: "0.65rem", color: "#374151", marginTop: "0.3rem" }}>—</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {loggedDays.length > 0 && (
+              <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280" }}>Recent entries</div>
+                {loggedDays.slice(-3).reverse().map((day, index) => {
+                  const delta = day.postLevel !== null ? day.preLevel - day.postLevel : null;
+                  return (
+                    <button
+                      key={`${day.day}-${index}`}
+                      onClick={() => onReviewDay(weekData.findIndex((e) => e.day === day.day && e.date === day.date))}
+                      style={{ textAlign: "left", width: "100%", padding: "0.85rem 1rem", borderRadius: "14px", border: "1px solid rgba(192,162,252,0.12)", background: "rgba(12,10,27,0.35)", cursor: "pointer", color: "inherit" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.8rem", color: "#f5edff" }}>{day.day} · {day.date}</div>
+                          <div style={{ fontSize: "0.72rem", color: "#b8a4de", marginTop: "0.18rem" }}>
+                            {delta !== null
+                              ? delta > 0 ? `Down ${delta} pt${delta === 1 ? "" : "s"} after action — real evidence.`
+                              : "Held steady after showing up. That counts."
+                              : "Tap to log how you felt after."}
+                          </div>
+                        </div>
+                        <div style={{ color: delta !== null && delta > 0 ? "#4ade80" : "#c084fc", fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                          {delta !== null ? `${day.preLevel}→${day.postLevel}` : "Add after"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* SCIENCE TAB */}
+      {focus === "science" && (
+        <motion.div key="science" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <div style={{ display: "grid", gap: "0.65rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#b8a4de", lineHeight: 1.65, padding: "0 0.25rem" }}>
+              Tap any card to understand the science behind what you feel — then tell us where you are.
+            </div>
+            {ANXIETY_SCIENCE_CARDS.map((card) => {
+              const isOpen = expandedCard === card.id;
+              const response = cardResponses[card.id];
+              return (
+                <motion.div
+                  key={card.id}
+                  layout
+                  className="glass-card glass-card-hover"
+                  style={{
+                    padding: "1.1rem 1.15rem",
+                    border: `1px solid ${isOpen ? card.color + "44" : "rgba(192,162,252,0.18)"}`,
+                    background: isOpen
+                      ? `linear-gradient(135deg, ${card.color}0d 0%, rgba(22,10,44,0.92) 100%)`
+                      : "rgba(42,20,80,0.72)",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setExpandedCard(isOpen ? null : card.id)}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div style={{
+                      width: 38, height: 38, borderRadius: "12px", flexShrink: 0,
+                      background: `${card.color}18`, border: `1px solid ${card.color}33`,
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem"
+                    }}>{card.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.9rem", color: "white" }}>{card.title}</div>
+                      <div style={{ fontSize: "0.74rem", color: "#b8a4de", marginTop: "0.1rem" }}>{card.short}</div>
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: card.color, flexShrink: 0, transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</div>
+                    {response !== undefined && <div style={{ fontSize: "0.65rem", color: "#4ade80", fontWeight: 700, flexShrink: 0 }}>✓</div>}
+                  </div>
+
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        style={{ overflow: "hidden" }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: `1px solid ${card.color}22` }}>
+                          <div style={{ fontSize: "0.82rem", color: "#e8deff", lineHeight: 1.72, marginBottom: "1rem" }}>{card.full}</div>
+                          <div style={{ fontSize: "0.72rem", color: card.color, fontWeight: 700, marginBottom: "0.6rem", letterSpacing: "0.05em" }}>{card.actionPrompt}</div>
+                          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                            {card.actionLabels.map((label, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleCardResponse(card.id, i)}
+                                style={{
+                                  flex: 1, minWidth: "fit-content", padding: "0.55rem 0.75rem", borderRadius: "12px", border: "1px solid",
+                                  borderColor: response === i ? card.color : "rgba(192,162,252,0.2)",
+                                  background: response === i ? `${card.color}22` : "rgba(124,58,237,0.06)",
+                                  color: response === i ? card.color : "#b8a4de",
+                                  fontSize: "0.72rem", fontFamily: "'Nunito',sans-serif", fontWeight: 700,
+                                  cursor: "pointer", transition: "all 0.18s",
+                                }}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          {response !== undefined && (
+                            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                              className="insight-bubble"
+                              style={{ marginTop: "0.85rem", borderColor: card.color }}>
+                              {response === 0
+                                ? "Good awareness. Knowing where you are is step one. Keep observing."
+                                : response === 1
+                                ? "You are building real insight. This awareness compounds over time."
+                                : "That is genuine growth. Your nervous system is learning."}
+                            </motion.div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* TRIGGERS TAB */}
+      {focus === "triggers" && (
+        <motion.div key="triggers" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="glass-card" style={{ padding: "1.35rem" }}>
+            <div className="display" style={{ fontSize: "1.05rem", color: "white", marginBottom: "0.3rem" }}>What sets it off</div>
+            <div style={{ fontSize: "0.78rem", color: "#b8a4de", lineHeight: 1.6, marginBottom: "1rem" }}>
+              Select a trigger for a specific micro-action, reframe, and the science behind why it affects you.
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "1rem" }}>
+              {(topTriggers.length
+                ? topTriggers
+                : Object.keys(TRIGGER_PLAYBOOK_EXTENDED).filter(k => k !== "default").map(k => ({ name: k, count: 0 }))
+              ).map((item) => (
+                <button
+                  key={item.name}
+                  className={`tag-btn ${activeTrigger === item.name ? "selected" : ""}`}
+                  onClick={() => setActiveTriggerKey(item.name)}
+                >
+                  {TRIGGER_PLAYBOOK_EXTENDED[item.name]?.icon || "•"} {item.name}
+                  {item.count > 0 && <span style={{ opacity: 0.6, marginLeft: "4px" }}>x{item.count}</span>}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTrigger}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                style={{
+                  padding: "1.1rem",
+                  borderRadius: "18px",
+                  background: "linear-gradient(135deg, rgba(34,12,58,0.92), rgba(69,28,109,0.65))",
+                  border: "1px solid rgba(216,180,254,0.22)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.85rem" }}>
+                  <span style={{ fontSize: "1.4rem" }}>{triggerGuide.icon}</span>
+                  <div style={{ fontSize: "0.62rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#f472b6" }}>
+                    {triggerGuide.title}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: "0.75rem" }}>
+                  <div style={{ padding: "0.85rem", borderRadius: "12px", background: "rgba(236,72,153,0.08)", border: "1px solid rgba(236,72,153,0.18)" }}>
+                    <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.78rem", color: "#f472b6", marginBottom: "0.3rem" }}>⚡ Micro-action</div>
+                    <div style={{ fontSize: "0.8rem", color: "#f3e8ff", lineHeight: 1.65 }}>{triggerGuide.microAction}</div>
+                  </div>
+                  <div style={{ padding: "0.85rem", borderRadius: "12px", background: "rgba(192,132,252,0.08)", border: "1px solid rgba(192,132,252,0.18)" }}>
+                    <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.78rem", color: "#c084fc", marginBottom: "0.3rem" }}>💭 Reframe</div>
+                    <div style={{ fontSize: "0.8rem", color: "#d8c8f8", lineHeight: 1.65 }}>{triggerGuide.reframe}</div>
+                  </div>
+                  <div style={{ padding: "0.85rem", borderRadius: "12px", background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.15)" }}>
+                    <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.78rem", color: "#4ade80", marginBottom: "0.3rem" }}>🧠 Why it works</div>
+                    <div style={{ fontSize: "0.78rem", color: "#d1fae5", lineHeight: 1.65 }}>{triggerGuide.scienceNote}</div>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
+
+      {/* CHALLENGES TAB */}
+      {focus === "challenges" && (
+        <motion.div key="challenges" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="glass-card" style={{ padding: "1.35rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.85rem" }}>
+              <div>
+                <div className="display" style={{ fontSize: "1.05rem", color: "white", marginBottom: "0.25rem" }}>Daily micro-challenges</div>
+                <div style={{ fontSize: "0.78rem", color: "#b8a4de", lineHeight: 1.5 }}>
+                  Each rep trains your nervous system. Complete one today.
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontFamily: "'Poppins',sans-serif", fontSize: "1.1rem", fontWeight: 700 }} className="gradient-text">{totalXP} XP</div>
+                <div style={{ fontSize: "0.58rem", color: "#6b7280", letterSpacing: "0.1em", textTransform: "uppercase" }}>earned</div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "1.15rem" }}>
+              <div style={{ height: 6, borderRadius: "999px", background: "rgba(124,58,237,0.15)", overflow: "hidden" }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((totalXP / 240) * 100, 100)}%` }}
+                  transition={{ duration: 0.7, ease: "easeOut" }}
+                  style={{ height: "100%", background: "linear-gradient(90deg, #ec4899, #f97316)", borderRadius: "999px", boxShadow: "0 0 8px rgba(236,72,153,0.4)" }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.58rem", color: "#4b5563", marginTop: "0.3rem" }}>
+                <span>0</span><span>Level up at 240 XP</span>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: "0.55rem" }}>
+              {MICRO_CHALLENGES.map((ch) => {
+                const done = completedChallenges.includes(ch.id);
+                return (
+                  <motion.div
+                    key={ch.id}
+                    layout
+                    style={{
+                      padding: "0.95rem 1rem",
+                      borderRadius: "16px",
+                      border: `1px solid ${done ? "rgba(74,222,128,0.3)" : "rgba(192,162,252,0.14)"}`,
+                      background: done ? "rgba(74,222,128,0.06)" : "rgba(12,10,27,0.35)",
+                      display: "flex", gap: "0.85rem", alignItems: "center",
+                    }}
+                  >
+                    <div style={{
+                      width: 40, height: 40, borderRadius: "12px", flexShrink: 0,
+                      background: done ? "rgba(74,222,128,0.15)" : "rgba(124,58,237,0.12)",
+                      border: `1px solid ${done ? "rgba(74,222,128,0.3)" : "rgba(124,58,237,0.2)"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem",
+                    }}>{done ? "✓" : ch.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.84rem", color: done ? "#4ade80" : "white" }}>{ch.title}</div>
+                        <span style={{ fontSize: "0.62rem", fontWeight: 700, color: difficultyColor[ch.difficulty], background: `${difficultyColor[ch.difficulty]}18`, padding: "0.2rem 0.55rem", borderRadius: "999px", border: `1px solid ${difficultyColor[ch.difficulty]}33` }}>
+                          {ch.difficulty}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "#b8a4de", marginTop: "0.15rem", lineHeight: 1.45 }}>{ch.desc}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" }}>
+                        <span style={{ fontSize: "0.65rem", color: "#f472b6", fontWeight: 700 }}>+{ch.xp} XP</span>
+                        {!done ? (
+                          <button
+                            onClick={() => handleCompleteChallenge(ch.id)}
+                            style={{
+                              padding: "0.35rem 0.85rem", borderRadius: "999px", border: "1px solid rgba(236,72,153,0.4)",
+                              background: "rgba(236,72,153,0.1)", color: "#f472b6", fontSize: "0.7rem",
+                              fontFamily: "'Nunito',sans-serif", fontWeight: 700, cursor: "pointer", transition: "all 0.2s",
+                            }}
+                          >
+                            Mark done
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: "0.68rem", color: "#4ade80", fontWeight: 700 }}>Complete 🎉</span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {challengeFeedback && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                style={{
+                  position: "fixed", bottom: "6rem", left: "50%", transform: "translateX(-50%)",
+                  background: "linear-gradient(135deg, rgba(236,72,153,0.95), rgba(249,115,22,0.95))",
+                  color: "white", padding: "0.75rem 1.5rem", borderRadius: "999px",
+                  boxShadow: "0 4px 24px rgba(236,72,153,0.5)", fontSize: "0.85rem",
+                  fontFamily: "'Nunito',sans-serif", fontWeight: 700, zIndex: 200,
+                }}>
+                {challengeFeedback}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
+
+      {/* RESET TAB */}
+      {focus === "reset" && (
+        <motion.div key="reset" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="glass-card" style={{ padding: "1.35rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start", marginBottom: "1rem" }}>
+              <div>
+                <div className="display" style={{ fontSize: "1.05rem", color: "white", marginBottom: "0.25rem" }}>What to do right now</div>
+                <div style={{ fontSize: "0.78rem", color: "#b8a4de", lineHeight: 1.6 }}>
+                  Based on today's level — your nervous system's best next move.
+                </div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "1.2rem", color: resetPlan.color }}>{currentLevel}<span style={{ fontSize: "0.7rem", opacity: 0.7 }}>/10</span></div>
+                <div style={{ fontSize: "0.58rem", color: "#9ca3af", letterSpacing: "0.12em", textTransform: "uppercase" }}>today</div>
+              </div>
+            </div>
+
+            <div style={{
+              padding: "0.95rem 1.1rem", borderRadius: "18px", marginBottom: "1rem",
+              background: `${resetPlan.color}12`, border: `1px solid ${resetPlan.color}33`,
+            }}>
+              <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.92rem", color: resetPlan.color, marginBottom: "0.3rem" }}>{resetPlan.label}</div>
+              <div style={{ fontSize: "0.8rem", color: "#f3e8ff", lineHeight: 1.65 }}>{resetPlan.action}</div>
+            </div>
+
+            <div style={{ display: "grid", gap: "0.55rem" }}>
+              {[
+                {
+                  icon: "🏷️",
+                  title: "Step 1 — Name it",
+                  body: "Say out loud or write: 'I feel anxious at a X/10 right now.' Naming an emotion reduces amygdala activation immediately.",
+                  color: "#c084fc",
+                },
+                {
+                  icon: "🌬️",
+                  title: "Step 2 — Breathe (60 seconds)",
+                  body: "Four counts in, four hold, four out. One minute of this shifts your nervous system from threat to recovery mode.",
+                  color: "#4ade80",
+                },
+                {
+                  icon: "⚡",
+                  title: "Step 3 — Smallest step",
+                  body: "Do not wait to feel calm. Choose the tiniest social action available: eye contact, a message, one sentence. Action creates the calm.",
+                  color: "#fbbf24",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  style={{
+                    padding: "0.9rem 1rem", borderRadius: "16px",
+                    background: "rgba(12,10,27,0.35)", border: "1px solid rgba(192,162,252,0.12)",
+                    display: "flex", gap: "0.85rem", alignItems: "flex-start",
+                  }}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: "50%", flexShrink: 0, marginTop: "0.1rem",
+                    background: `${item.color}18`, border: `1px solid ${item.color}33`,
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.95rem",
+                  }}>{item.icon}</div>
+                  <div>
+                    <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.84rem", color: item.color, marginBottom: "0.2rem" }}>{item.title}</div>
+                    <div style={{ fontSize: "0.77rem", color: "#cfc1ee", lineHeight: 1.6 }}>{item.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="btn-primary"
+              onClick={onLogNow}
+              style={{ width: "100%", marginTop: "1.1rem", fontSize: "0.88rem" }}
+            >
+              Log how you feel after →
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+
 // ── Breathing Exercise ─────────────────────────────────────────────────────
 function BreathingExercise() {
   const [selected, setSelected] = useState(0);
@@ -989,10 +1670,7 @@ export default function ProfileView() {
             </AnimatePresence>
           </motion.div>
 
-          {/* Profile Plan */}
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Profileplan />
-          </motion.div>
+          
 
           {/* Stats */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
@@ -1017,7 +1695,7 @@ export default function ProfileView() {
           }}>
             {[
               { id: "log", label: "📋 Log" },
-              { id: "courage", label: "📈 Progress" },
+              { id: "courage", label: "🧭 Support" },
               { id: "breathe", label: "🌊 Breathe" },
               { id: "insights", label: "✦ Insights" },
               { id: "story", label: "📖 Story" },
@@ -1099,39 +1777,18 @@ export default function ProfileView() {
 
             {tab === "courage" && (
               <motion.div key="courage" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
-                  <div className="display" style={{ fontSize: "1.15rem", marginBottom: "0.35rem", color: "white" }}>
-                    The Courage Correlation
-                  </div>
-                  <div style={{ fontSize: "0.8rem", color: "#9ca3af", marginBottom: "1.25rem", lineHeight: 1.6 }}>
-                    Your anxiety <em>before</em> vs <em>after</em> taking action. The gap is your courage, made visible.
-                  </div>
-                  <CourageGraph weekData={weekData} />
-                </div>
+                <AnxietySupportHub
+                  weekData={weekData}
+                  onLogNow={() => {
+                    const n = weekData.findIndex(d => d.preLevel === null);
+                    setEditingDay(n === -1 ? 4 : n);
+                  }}
+                  onReviewDay={(idx) => setEditingDay(idx)}
+                />
 
-                <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "0.75rem" }}>
+                <div className="glass-card" style={{ padding: "1.5rem", marginTop: "0.75rem" }}>
                   <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "1rem" }}>
-                    Actions taken this week
-                  </div>
-                  {weekData.map((d, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0", borderBottom: i < 4 ? "1px solid rgba(124,58,237,0.08)" : "none" }}>
-                      <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: "0.7rem", width: 32, color: "#9ca3af" }}>{d.day}</div>
-                      <div style={{ flex: 1, height: "6px", background: "rgba(124,58,237,0.1)", borderRadius: "3px", overflow: "hidden" }}>
-                        {d.actionTaken && (
-                          <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 0.7, delay: i * 0.1 }}
-                            style={{ height: "100%", background: "linear-gradient(90deg, #4ade80, #059669)", borderRadius: "3px", boxShadow: "0 0 8px rgba(74,222,128,0.4)" }} />
-                        )}
-                      </div>
-                      <div style={{ fontSize: "0.7rem", color: d.actionTaken ? "#4ade80" : d.preLevel !== null ? "#6b7280" : "#374151", width: 64, textAlign: "right" }}>
-                        {d.actionTaken ? "✓ action" : d.preLevel !== null ? "logged" : "—"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="glass-card" style={{ padding: "1.5rem" }}>
-                  <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#6b7280", marginBottom: "1rem" }}>
-                    Achievements
+                    Growth markers
                   </div>
                   <AchievementsPanel weekData={weekData} streak={streak} />
                 </div>

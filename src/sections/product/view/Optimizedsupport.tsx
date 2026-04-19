@@ -81,6 +81,13 @@ const [potentialMatches, setPotentialMatches] = useState([]);
 const [showFullPost, setShowFullPost] = useState({});
 
 const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+const [showJourneyModal, setShowJourneyModal] = useState(false);
+const [journeyStep, setJourneyStep] = useState(1);
+const [journeyForm, setJourneyForm] = useState({ title: '', before: '', today: '', goal: '', timeline: '', category: '' });
+const [journeySubmitting, setJourneySubmitting] = useState(false);
+const [userHasJourney, setUserHasJourney] = useState(false);
+const [userPlan, setUserPlan] = useState<any>(null);
+const [showBuddyModal, setShowBuddyModal] = useState<{postId: string, authorName: string} | null>(null);
 
 const POSTS_PER_PAGE = 15;
 const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
@@ -654,6 +661,60 @@ const handleCreatePost = async (postType, postData) => {
   });
 };
 
+// Fetch user's life_skills plan for journey post
+useEffect(() => {
+  if (!currentUser) return;
+  const db = getFirestore();
+  const planRef = doc(db, 'users', currentUser.uid, 'datedcourses', 'life_skills');
+  const unsub = onSnapshot(planRef, (snap) => {
+    if (snap.exists()) {
+      setUserPlan(snap.data());
+    }
+  });
+  return () => unsub();
+}, [currentUser]);
+
+// Check if current user has created a journey post
+useEffect(() => {
+  if (!currentUser || posts.length === 0) return;
+  const myJourney = posts.find(
+    p => p.type === 'journey-tracker' && p.author?.uid === currentUser.uid
+  );
+  setUserHasJourney(!!myJourney);
+}, [currentUser, posts]);
+
+const handleJourneySubmit = async () => {
+  if (!journeyForm.title.trim() || !journeyForm.before.trim() || !journeyForm.today.trim() || !journeyForm.goal.trim()) return;
+  setJourneySubmitting(true);
+  try {
+    // Attach live plan data if user has completed the phases system
+    const planSnapshot = userPlan?.task_overview || null;
+    await handleCreatePost('journey-tracker', {
+      title: journeyForm.title,
+      before: journeyForm.before,
+      today: journeyForm.today,
+      goal: journeyForm.goal,
+      timeline: journeyForm.timeline,
+      category: journeyForm.category,
+      // Connected plan fields
+      connectedPlan: planSnapshot ? {
+        tasks: planSnapshot.tasks || [],
+        days: planSnapshot.days || [],
+        userContext: planSnapshot.user_context || {},
+        completionRate: userPlan?.completion_rate || 0,
+        lastUpdated: new Date().toISOString(),
+      } : null,
+    });
+    setUserHasJourney(true);
+    setShowJourneyModal(false);
+    setJourneyForm({ title: '', before: '', today: '', goal: '', timeline: '', category: '' });
+    setJourneyStep(1);
+    setActiveTab('journeys');
+  } finally {
+    setJourneySubmitting(false);
+  }
+};
+
 const handleOnboardingComplete = (preferences) => {
   setOnboardingPreferences(preferences);
   setShowOnboarding(false);
@@ -1213,20 +1274,28 @@ Share
 );
 };
 
-// ============================================ // JOURNEY TRACKER CARD (Similar interactive enhancements) // ============================================
+// ============================================
+// JOURNEY TRACKER CARD — Connected to Backend Plan
+// ============================================
 
 const JourneyTrackerCard = ({ post }) => {
   const [localReactions, setLocalReactions] = useState(post.reactions);
   const [hasReacted, setHasReacted] = useState({});
   const [copySuccess, setCopySuccess] = useState(false);
+  const [showPlanTasks, setShowPlanTasks] = useState(false);
+  const [buddySent, setBuddySent] = useState(false);
+
+  const plan = post.connectedPlan;
+  const tasks = plan?.tasks || [];
+  const completionRate = plan?.completionRate || 0;
+  const doneTasks = tasks.filter((t: any) => t.done).length;
+  const totalTasks = tasks.length;
 
   const handleCheer = async () => {
     if (hasReacted.cheering) return;
     const db = getFirestore();
     const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
-    await updateDoc(postRef, {
-      'reactions.cheering': increment(1)
-    });
+    await updateDoc(postRef, { 'reactions.cheering': increment(1) });
     setLocalReactions(prev => ({ ...prev, cheering: prev.cheering + 1 }));
     setHasReacted(prev => ({ ...prev, cheering: true }));
   };
@@ -1235,9 +1304,7 @@ const JourneyTrackerCard = ({ post }) => {
     const db = getFirestore();
     const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
     const delta = hasReacted.relate ? -1 : 1;
-    await updateDoc(postRef, {
-      'reactions.relate': increment(delta)
-    });
+    await updateDoc(postRef, { 'reactions.relate': increment(delta) });
     setLocalReactions(prev => ({ ...prev, relate: prev.relate + delta }));
     setHasReacted(prev => ({ ...prev, relate: !prev.relate }));
   };
@@ -1246,9 +1313,7 @@ const JourneyTrackerCard = ({ post }) => {
     const db = getFirestore();
     const postRef = doc(db, 'groups', 'socialAvoidance', 'posts', post.id);
     const delta = hasReacted.following ? -1 : 1;
-    await updateDoc(postRef, {
-      'reactions.following': increment(delta)
-    });
+    await updateDoc(postRef, { 'reactions.following': increment(delta) });
     setLocalReactions(prev => ({ ...prev, following: prev.following + delta }));
     setHasReacted(prev => ({ ...prev, following: !prev.following }));
   };
@@ -1271,9 +1336,48 @@ const JourneyTrackerCard = ({ post }) => {
     }
   };
 
+  const handleBecomeActionBuddy = async () => {
+    if (!currentUser || buddySent) return;
+    const db = getFirestore();
+    // Record buddy request under the post author's account
+    const authorUid = post.author?.uid;
+    if (!authorUid || authorUid === currentUser.uid) return;
+
+    await addDoc(collection(db, 'users', authorUid, 'buddyRequests'), {
+      fromUid: currentUser.uid,
+      fromName: currentUser.displayName || 'Anonymous',
+      fromPhoto: currentUser.photoURL || '👤',
+      postId: post.id,
+      journeyTitle: post.title,
+      message: `Hey! I saw your journey post and I'd love to be your Action Check-in Buddy. Let's keep each other on track! 💪`,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+
+    // Also record on current user's end
+    await addDoc(collection(db, 'users', currentUser.uid, 'buddySent'), {
+      toUid: authorUid,
+      postId: post.id,
+      journeyTitle: post.title,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+
+    setBuddySent(true);
+    setShowBuddyModal({ postId: post.id, authorName: post.author?.displayName || 'them' });
+  };
+
+  const isOwnPost = currentUser?.uid === post.author?.uid;
+
+  // Difficulty color for task pill
+  const diffColor = (level: string) => {
+    if (level === 'easy') return 'bg-green-500/20 text-green-300 border-green-500/30';
+    if (level === 'challenging') return 'bg-red-500/20 text-red-300 border-red-500/30';
+    return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
+  };
+
   return (
-    <div className="rounded-2xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5
-    backdrop-blur-sm p-4 md:p-6 space-y-4 relative">
+    <div className="rounded-2xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-blue-500/5 backdrop-blur-sm p-4 md:p-6 space-y-4 relative">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
@@ -1282,11 +1386,16 @@ const JourneyTrackerCard = ({ post }) => {
             {post.author.avatar}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-white font-bold text-sm md:text-base">Anonymous</span>
-              <span className="px-2 py-0.5 bg-purple-500 text-white text-xs rounded-full font-bold">
-                JOURNEY
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-white font-bold text-sm md:text-base">
+                {isOwnPost ? 'You' : 'Anonymous'}
               </span>
+              <span className="px-2 py-0.5 bg-purple-500 text-white text-xs rounded-full font-bold">JOURNEY</span>
+              {plan && (
+                <span className="px-2 py-0.5 bg-indigo-500/30 border border-indigo-400/40 text-indigo-300 text-xs rounded-full font-semibold flex items-center gap-1">
+                  <Target className="w-3 h-3" /> Plan Connected
+                </span>
+              )}
             </div>
             <span className="text-purple-400 text-xs">{post.timeAgo} • {post.timeline}</span>
           </div>
@@ -1326,6 +1435,106 @@ const JourneyTrackerCard = ({ post }) => {
         </div>
       </div>
 
+      {/* ─── CONNECTED PLAN SECTION ─── */}
+      {plan && totalTasks > 0 && (
+        <div className="rounded-xl border-2 border-indigo-500/30 bg-indigo-500/5 overflow-hidden">
+          {/* Plan Header - always visible */}
+          <button
+            onClick={() => setShowPlanTasks(!showPlanTasks)}
+            className="w-full p-3 md:p-4 flex items-center justify-between gap-3 hover:bg-white/5 transition-all"
+          >
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-4 h-4 text-white" />
+              </div>
+              <div className="text-left min-w-0">
+                <p className="text-indigo-300 font-bold text-sm">5-Day Action Plan</p>
+                <p className="text-purple-400 text-xs truncate">
+                  {plan.userContext?.problem || 'Social skills journey'}
+                </p>
+              </div>
+            </div>
+            {/* Progress Ring + Stats */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="text-right">
+                <p className="text-white font-black text-base">{doneTasks}<span className="text-purple-400 font-normal text-xs">/{totalTasks}</span></p>
+                <p className="text-purple-400 text-xs">tasks done</p>
+              </div>
+              {/* Mini circular progress */}
+              <div className="relative w-10 h-10">
+                <svg className="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(99,102,241,0.2)" strokeWidth="4" />
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#818cf8" strokeWidth="4"
+                    strokeDasharray={`${2 * Math.PI * 16}`}
+                    strokeDashoffset={`${2 * Math.PI * 16 * (1 - completionRate / 100)}`}
+                    strokeLinecap="round" className="transition-all duration-700" />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-black">{Math.round(completionRate)}%</span>
+              </div>
+              <ChevronDown className={`w-4 h-4 text-indigo-400 transition-transform ${showPlanTasks ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+
+          {/* Progress Bar */}
+          <div className="h-1.5 bg-indigo-900/40 mx-4 mb-3 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-700"
+              style={{ width: `${completionRate}%` }}
+            />
+          </div>
+
+          {/* Expandable Tasks */}
+          {showPlanTasks && (
+            <div className="px-3 md:px-4 pb-4 space-y-2">
+              <p className="text-indigo-300/70 text-xs font-semibold uppercase tracking-wide mb-3">Daily Tasks</p>
+              {tasks.map((task: any, idx: number) => (
+                <div key={task.id || idx} className={`p-3 rounded-xl border transition-all ${
+                  task.done
+                    ? 'bg-green-500/10 border-green-500/30'
+                    : 'bg-white/5 border-white/10'
+                }`}>
+                  <div className="flex items-start gap-2.5">
+                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                      task.done ? 'bg-green-500 border-green-500' : 'border-purple-500/50'
+                    }`}>
+                      {task.done && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className={`font-bold text-sm ${task.done ? 'text-green-300 line-through' : 'text-white'}`}>
+                          {task.title}
+                        </p>
+                        {task.comfortLevel && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs border ${diffColor(task.comfortLevel)}`}>
+                            {task.comfortLevel}
+                          </span>
+                        )}
+                      </div>
+                      {task.location && (
+                        <p className="text-purple-400 text-xs flex items-center gap-1">
+                          <span>📍</span> {task.location}
+                          {task.estimatedTime && <span className="ml-2 text-purple-500">• {task.estimatedTime}</span>}
+                        </p>
+                      )}
+                    </div>
+                    {task.xp && (
+                      <span className="text-xs text-yellow-400 font-bold flex-shrink-0">+{task.xp} XP</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {plan.userContext?.primary_anxiety && (
+                <div className="mt-3 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  <p className="text-orange-300 text-xs">
+                    <strong>Working on:</strong> {plan.userContext.primary_anxiety}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Progress Updates */}
       {post.updates && post.updates.length > 0 && (
         <div className="pt-4 border-t-2 border-white/5 space-y-2">
@@ -1345,6 +1554,25 @@ const JourneyTrackerCard = ({ post }) => {
         </div>
       )}
 
+      {/* ─── ACTION BUDDY CTA ─── */}
+      {!isOwnPost && (
+        <button
+          onClick={handleBecomeActionBuddy}
+          disabled={buddySent}
+          className={`w-full px-4 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${
+            buddySent
+              ? 'bg-green-700/60 text-green-200 cursor-not-allowed border border-green-500/40'
+              : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white shadow-violet-500/30 active:scale-95'
+          }`}
+        >
+          {buddySent ? (
+            <><CheckCircle className="w-5 h-5" /> Buddy Request Sent! 🎉</>
+          ) : (
+            <><Users className="w-5 h-5" /> Become Action Check-in Buddy 🤝</>
+          )}
+        </button>
+      )}
+
       {/* Cheer Button */}
       <button
         onClick={handleCheer}
@@ -1361,8 +1589,6 @@ const JourneyTrackerCard = ({ post }) => {
 
       {/* Reactions Row */}
       <div className="flex items-center gap-2 md:gap-3 pt-3 border-t-2 border-white/5 flex-wrap">
-        
-        {/* Relate */}
         <button
           onClick={handleRelate}
           className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
@@ -1374,7 +1600,6 @@ const JourneyTrackerCard = ({ post }) => {
           <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Relate</span>
         </button>
 
-        {/* Cheering count */}
         <button
           onClick={handleCheer}
           disabled={hasReacted.cheering}
@@ -1387,7 +1612,6 @@ const JourneyTrackerCard = ({ post }) => {
           <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Cheering</span>
         </button>
 
-        {/* Following */}
         <button
           onClick={handleFollow}
           className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 ${
@@ -1401,22 +1625,14 @@ const JourneyTrackerCard = ({ post }) => {
           </span>
         </button>
 
-        {/* Share */}
         <button
           onClick={handleShare}
-          className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20
-          border border-purple-500/30 rounded-lg transition-all ml-auto"
+          className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg transition-all ml-auto"
         >
           {copySuccess ? (
-            <>
-              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" />
-              <span className="text-green-400 text-xs md:text-sm">Copied!</span>
-            </>
+            <><CheckCircle className="w-3 h-3 md:w-4 md:h-4 text-green-400" /><span className="text-green-400 text-xs md:text-sm">Copied!</span></>
           ) : (
-            <>
-              <Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" />
-              <span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Share</span>
-            </>
+            <><Share2 className="w-3 h-3 md:w-4 md:h-4 text-purple-400" /><span className="text-purple-300 text-xs md:text-sm hidden sm:inline">Share</span></>
           )}
         </button>
       </div>
@@ -2953,65 +3169,137 @@ return ( <div id="community-top-bar" data-tour="community-header"  className="mi
   </div>
 )}
 
+{/* ═══════════════════════════════════════════════════ */}
+{/* 🛤️ JOURNEYS HERO — primary section, always visible */}
+{/* ═══════════════════════════════════════════════════ */}
+<div className="mb-5 rounded-2xl overflow-hidden border-2 border-purple-400/60 shadow-[0_0_40px_rgba(168,85,247,0.25)] relative">
+  {/* Animated gradient background */}
+  <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 opacity-95" />
+  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-indigo-500/10 animate-pulse" />
+
+  <div className="relative z-10 p-5 md:p-6">
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg shadow-purple-500/40">
+          🛤️
+        </div>
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-white font-black text-lg md:text-xl tracking-tight">My Journey</h2>
+            <span className="px-2 py-0.5 bg-purple-500/40 border border-purple-400/50 text-purple-200 text-xs rounded-full font-bold uppercase tracking-wide">Core Feature</span>
+          </div>
+          <p className="text-purple-300 text-sm mt-0.5">Document where you started, where you are, and where you're going.</p>
+        </div>
+      </div>
+
+      {/* CTA */}
+      {userHasJourney ? (
+        <button
+          onClick={() => { setActiveTab('journeys'); }}
+          className="flex-shrink-0 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl text-white font-bold text-sm flex items-center gap-2 transition-all shadow-lg"
+        >
+          <Eye className="w-4 h-4" />
+          View My Journey
+        </button>
+      ) : (
+        <button
+          onClick={() => setShowJourneyModal(true)}
+          className="flex-shrink-0 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-xl text-white font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-purple-500/30 animate-pulse-slow"
+        >
+          <Plus className="w-4 h-4" />
+          Start Your Journey
+        </button>
+      )}
+    </div>
+
+    {/* Steps preview */}
+    <div className="mt-4 grid grid-cols-3 gap-2 md:gap-3">
+      {[
+        { icon: '📍', label: 'Where you started', color: 'red' },
+        { icon: '🔥', label: 'Where you are now', color: 'yellow' },
+        { icon: '🎯', label: 'Where you\'re going', color: 'green' },
+      ].map((step, i) => (
+        <div key={i} className={`p-2.5 md:p-3 rounded-xl border ${
+          step.color === 'red' ? 'bg-red-500/10 border-red-500/30' :
+          step.color === 'yellow' ? 'bg-yellow-500/10 border-yellow-500/30' :
+          'bg-green-500/10 border-green-500/30'
+        } text-center`}>
+          <div className="text-xl mb-1">{step.icon}</div>
+          <p className="text-white/70 text-xs leading-tight">{step.label}</p>
+        </div>
+      ))}
+    </div>
+
+    {!userHasJourney && (
+      <p className="mt-3 text-center text-purple-300/70 text-xs">
+        ✨ Every member shares their journey — it's what makes this community powerful
+      </p>
+    )}
+  </div>
+</div>
+
 {/* Filters - Mobile Scrollable */}
-<div data-tour="filter-tabs"   className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6 overflow-x-auto pb-2 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide">
+<div data-tour="filter-tabs" className="flex items-center gap-2 mb-4 md:mb-6 overflow-x-auto pb-2 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide">
   <button
     data-tour="all-posts-tab"
     onClick={() => setActiveTab('all')}
-    className={`px-3 md:px-4 py-2 ${activeTab === 'all' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-    rounded-lg text-white font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
+    className={`px-3 md:px-4 py-2 ${activeTab === 'all' ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-purple-300'}
+    rounded-lg font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
   >
     All Posts
   </button>
   <button
+    data-tour="journeys-tab"
+    onClick={() => setActiveTab('journeys')}
+    className={`px-3 md:px-4 py-2 flex items-center gap-1.5 font-bold text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0 rounded-xl border-2 ${
+      activeTab === 'journeys'
+        ? 'bg-gradient-to-r from-purple-600 to-pink-600 border-purple-400 text-white shadow-md shadow-purple-500/30'
+        : 'bg-purple-500/15 border-purple-500/40 text-purple-300 hover:border-purple-400 hover:bg-purple-500/25'
+    }`}
+  >
+    🛤️ Journeys
+    {!userHasJourney && <span className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" />}
+  </button>
+  <button
     data-tour="activities-tab"
     onClick={() => setActiveTab('activities')}
-    className={`px-3 md:px-4 py-2 ${activeTab === 'activities' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-    rounded-lg text-purple-300 font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
+    className={`px-3 md:px-4 py-2 ${activeTab === 'activities' ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-purple-300'}
+    rounded-lg font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
   >
-    🎯 Community Activities
+    🎯 Activities
   </button>
   <button
     data-tour="support-tab"
     onClick={() => setActiveTab('support')}
-    className={`px-3 md:px-4 py-2 ${activeTab === 'support' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-    rounded-lg text-purple-300 font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
+    className={`px-3 md:px-4 py-2 ${activeTab === 'support' ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-purple-300'}
+    rounded-lg font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
   >
-    🆘 Need Support
+    🆘 Support
   </button>
   <button
     data-tour="solutions-tab"
     onClick={() => setActiveTab('solutions')}
-    className={`px-3 md:px-4 py-2 ${activeTab === 'solutions' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-    rounded-lg text-purple-300 font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
+    className={`px-3 md:px-4 py-2 ${activeTab === 'solutions' ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-purple-300'}
+    rounded-lg font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
   >
     💡 Solutions
   </button>
   <button
-    data-tour="journeys-tab"
-    onClick={() => setActiveTab('journeys')}
-    className={`px-3 md:px-4 py-2 ${activeTab === 'journeys' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-    rounded-lg text-purple-300 font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
-  >
-    🛤️ Journeys
-  </button>
-  <button
     data-tour="challenges-tab"
     onClick={() => setActiveTab('challenges')}
-    className={`px-3 md:px-4 py-2 ${activeTab === 'challenges' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-    rounded-lg text-purple-300 font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
+    className={`px-3 md:px-4 py-2 ${activeTab === 'challenges' ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-purple-300'}
+    rounded-lg font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
   >
     🎯 Challenges
   </button>
   <button
-  data-tour="partners-tab"
-  onClick={() => setActiveTab('accountability')}
-  className={`px-3 md:px-4 py-2 ${activeTab === 'accountability' ? 'bg-purple-600' : 'bg-slate-800 hover:bg-slate-700'}
-  rounded-lg text-purple-300 font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
->
-  🤝 My Partners
-</button>
-
+    data-tour="partners-tab"
+    onClick={() => setActiveTab('accountability')}
+    className={`px-3 md:px-4 py-2 ${activeTab === 'accountability' ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-purple-300'}
+    rounded-lg font-medium text-xs md:text-sm whitespace-nowrap transition-all flex-shrink-0`}
+  >
+    🤝 Partners
+  </button>
 </div>
 
 {/* Create Post Button */}
@@ -3106,7 +3394,7 @@ return ( <div id="community-top-bar" data-tour="community-header"  className="mi
         if (activeTab === 'all') return true;
         if (activeTab === 'support') return post.type === 'struggle-solution';
         if (activeTab === 'solutions') return post.type === 'what-worked';
-        if (activeTab === 'journeys') return post.type === 'journey-tracker';
+    if (activeTab === 'journeys') return post.type === 'journey-tracker';
         if (activeTab === 'challenges') return post.type === 'micro-challenge';
         return true;
       });
@@ -3115,6 +3403,22 @@ return ( <div id="community-top-bar" data-tour="community-header"  className="mi
 
       return (
         <>
+          {/* If viewing journeys tab and user hasn't created one, show prompt */}
+          {activeTab === 'journeys' && !userHasJourney && (
+            <div className="mb-4 p-5 rounded-2xl border-2 border-dashed border-purple-400/60 bg-gradient-to-br from-purple-900/30 to-pink-900/20 text-center">
+              <div className="text-5xl mb-3">🛤️</div>
+              <h3 className="text-white font-black text-lg mb-1">Share Your Journey!</h3>
+              <p className="text-purple-300 text-sm mb-4 max-w-xs mx-auto">
+                Every member posts their journey. It's how we support each other. Be the next to inspire someone.
+              </p>
+              <button
+                onClick={() => setShowJourneyModal(true)}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-xl text-white font-bold text-sm transition-all shadow-lg shadow-purple-500/30 flex items-center gap-2 mx-auto"
+              >
+                <Plus className="w-4 h-4" /> Create My Journey Post
+              </button>
+            </div>
+          )}
           {visible.map((post, index) => (
             <div key={post.id}>
               {post.type === 'struggle-solution' && <StruggleSolutionCard post={post} postIndex={index} />}
@@ -3152,6 +3456,263 @@ return ( <div id="community-top-bar" data-tour="community-header"  className="mi
 {/* Mobile Bottom Navigation (Optional) */}
 {/* Modals */}
 
+
+{/* ─── ACTION BUDDY CONFIRMATION MODAL ─── */}
+{showBuddyModal && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowBuddyModal(null)}>
+    <div
+      className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-violet-500/50 rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl shadow-violet-500/20"
+      onClick={e => e.stopPropagation()}
+      style={{ animation: 'fadeIn 0.25s ease-out' }}
+    >
+      <div className="text-5xl mb-3">🤝</div>
+      <h3 className="text-white text-xl font-black mb-2">Buddy Request Sent!</h3>
+      <p className="text-purple-300 text-sm mb-5 leading-relaxed">
+        You've asked to become Action Check-in Buddies. Once accepted, you'll track each other's daily tasks and progress together.
+      </p>
+      <div className="p-3 bg-violet-500/10 border border-violet-500/30 rounded-xl mb-5">
+        <p className="text-violet-300 text-xs font-semibold mb-2">What happens next?</p>
+        <ul className="space-y-1.5 text-left">
+          {[
+            '✅ They get notified about your request',
+            '💬 Message each other after accepting',
+            '📊 Track each other\'s daily task completions',
+            '🔔 Get check-in reminders together',
+          ].map((item, i) => <li key={i} className="text-purple-300 text-xs">{item}</li>)}
+        </ul>
+      </div>
+      <button onClick={() => setShowBuddyModal(null)}
+        className="w-full px-4 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 rounded-xl text-white font-bold transition-all">
+        Awesome! 🎉
+      </button>
+    </div>
+  </div>
+)}
+
+{/* ═══════════════════════════════════════════════════ */}
+{/* 🛤️ JOURNEY CREATION MODAL — smooth multi-step     */}
+{/* ═══════════════════════════════════════════════════ */}
+{showJourneyModal && (
+  <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center p-0 md:p-4"
+    style={{ backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.7)' }}>
+    <div className="w-full md:max-w-lg bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 border-2 border-purple-500/50 rounded-t-3xl md:rounded-3xl shadow-[0_0_80px_rgba(168,85,247,0.4)] overflow-hidden"
+      style={{ maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+      
+      {/* Modal Header */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-purple-500/20 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl shadow-lg shadow-purple-500/30">🛤️</div>
+          <div>
+            <h2 className="text-white font-black text-lg">Start Your Journey</h2>
+            <p className="text-purple-400 text-xs">Step {journeyStep} of 4</p>
+          </div>
+        </div>
+        <button onClick={() => { setShowJourneyModal(false); setJourneyStep(1); }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-purple-300 hover:text-white transition-all">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="px-5 py-2 flex-shrink-0">
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+            style={{ width: `${(journeyStep / 4) * 100}%` }} />
+        </div>
+        <div className="flex justify-between mt-1">
+          {['Title', 'Before', 'Today', 'Goal'].map((label, i) => (
+            <span key={label} className={`text-[10px] font-bold transition-colors ${journeyStep > i ? 'text-purple-300' : 'text-white/20'}`}>{label}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Scrollable Form Body */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+        {/* Step 1: Title & Category */}
+        {journeyStep === 1 && (
+          <div className="space-y-4 animate-[fadeIn_0.3s_ease]">
+            <div className="text-center py-2">
+              <div className="text-4xl mb-2">✨</div>
+              <h3 className="text-white font-bold text-base">Give your journey a name</h3>
+              <p className="text-purple-400 text-sm mt-1">What transformation are you working on?</p>
+            </div>
+            {/* Plan connection indicator */}
+            {userPlan?.task_overview ? (
+              <div className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                  <Target className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-indigo-300 font-bold text-xs">5-Day Plan Detected 🎉</p>
+                  <p className="text-purple-400 text-xs">Your action plan will be auto-connected to this journey post so buddies can see your progress.</p>
+                </div>
+                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+                  <Target className="w-4 h-4 text-purple-400" />
+                </div>
+                <p className="text-purple-400 text-xs">Complete the onboarding phases to connect a live action plan to your journey post.</p>
+              </div>
+            )}
+            <div>
+              <label className="block text-purple-300 text-sm font-semibold mb-2">Journey Title *</label>
+              <input
+                type="text"
+                placeholder="e.g. Overcoming social anxiety one step at a time"
+                value={journeyForm.title}
+                onChange={e => setJourneyForm(f => ({ ...f, title: e.target.value }))}
+                className="w-full px-4 py-3 bg-white/5 border-2 border-purple-500/30 focus:border-purple-400 rounded-xl text-white placeholder-purple-500/60 outline-none transition-all text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-purple-300 text-sm font-semibold mb-2">Category (optional)</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['Social Anxiety', 'Making Friends', 'Dating', 'Work/Career', 'Family', 'Self-Confidence'].map(cat => (
+                  <button key={cat} type="button"
+                    onClick={() => setJourneyForm(f => ({ ...f, category: f.category === cat ? '' : cat }))}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-all ${journeyForm.category === cat ? 'bg-purple-500/30 border-purple-400 text-white' : 'bg-white/5 border-white/10 text-purple-400 hover:border-purple-500/50'}`}
+                  >{cat}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Before */}
+        {journeyStep === 2 && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-red-500/10 border-2 border-red-500/30 text-center">
+              <div className="text-3xl mb-1">📍</div>
+              <h3 className="text-red-300 font-bold text-base">Where did you start?</h3>
+              <p className="text-red-400/70 text-xs mt-1">Be honest — this is your baseline. No judgment here.</p>
+            </div>
+            <div>
+              <label className="block text-purple-300 text-sm font-semibold mb-2">Before — your starting point *</label>
+              <textarea
+                rows={5}
+                placeholder="Describe how things were before you started this journey. What was your lowest point? What made you decide to change?"
+                value={journeyForm.before}
+                onChange={e => setJourneyForm(f => ({ ...f, before: e.target.value }))}
+                className="w-full px-4 py-3 bg-white/5 border-2 border-red-500/30 focus:border-red-400 rounded-xl text-white placeholder-purple-500/60 outline-none transition-all text-sm resize-none"
+              />
+              <p className="text-purple-500 text-xs mt-1">{journeyForm.before.length} characters</p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Today */}
+        {journeyStep === 3 && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-yellow-500/10 border-2 border-yellow-500/30 text-center">
+              <div className="text-3xl mb-1">🔥</div>
+              <h3 className="text-yellow-300 font-bold text-base">Where are you right now?</h3>
+              <p className="text-yellow-400/70 text-xs mt-1">What progress have you made? Even small wins count.</p>
+            </div>
+            <div>
+              <label className="block text-purple-300 text-sm font-semibold mb-2">Today — your current state *</label>
+              <textarea
+                rows={5}
+                placeholder="Where are you on your journey today? What have you learned or changed? What are you actively working on?"
+                value={journeyForm.today}
+                onChange={e => setJourneyForm(f => ({ ...f, today: e.target.value }))}
+                className="w-full px-4 py-3 bg-white/5 border-2 border-yellow-500/30 focus:border-yellow-400 rounded-xl text-white placeholder-purple-500/60 outline-none transition-all text-sm resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-purple-300 text-sm font-semibold mb-2">Timeline (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Started 3 months ago, 6-month journey"
+                value={journeyForm.timeline}
+                onChange={e => setJourneyForm(f => ({ ...f, timeline: e.target.value }))}
+                className="w-full px-4 py-3 bg-white/5 border-2 border-purple-500/30 focus:border-purple-400 rounded-xl text-white placeholder-purple-500/60 outline-none transition-all text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Goal */}
+        {journeyStep === 4 && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30 text-center">
+              <div className="text-3xl mb-1">🎯</div>
+              <h3 className="text-green-300 font-bold text-base">Where are you going?</h3>
+              <p className="text-green-400/70 text-xs mt-1">Your vision for the future. Dream big.</p>
+            </div>
+            <div>
+              <label className="block text-purple-300 text-sm font-semibold mb-2">Goal — your destination *</label>
+              <textarea
+                rows={4}
+                placeholder="What does success look like for you? What life do you want to build? What will be different when you achieve this?"
+                value={journeyForm.goal}
+                onChange={e => setJourneyForm(f => ({ ...f, goal: e.target.value }))}
+                className="w-full px-4 py-3 bg-white/5 border-2 border-green-500/30 focus:border-green-400 rounded-xl text-white placeholder-purple-500/60 outline-none transition-all text-sm resize-none"
+              />
+            </div>
+            {/* Summary preview */}
+            <div className="p-3 rounded-xl bg-white/5 border border-purple-500/20 space-y-2">
+              <p className="text-purple-400 text-xs font-bold uppercase tracking-wide">Journey Preview</p>
+              <p className="text-white font-bold text-sm">"{journeyForm.title || 'My Journey'}"</p>
+              {journeyForm.category && <span className="px-2 py-0.5 bg-purple-500/30 text-purple-300 text-xs rounded-full">{journeyForm.category}</span>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer Navigation */}
+      <div className="px-5 pb-5 pt-3 border-t border-purple-500/20 flex gap-3 flex-shrink-0">
+        {journeyStep > 1 ? (
+          <button onClick={() => setJourneyStep(s => s - 1)}
+            className="px-5 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-purple-300 font-bold text-sm transition-all flex items-center gap-2">
+            ← Back
+          </button>
+        ) : (
+          <button onClick={() => { setShowJourneyModal(false); setJourneyStep(1); }}
+            className="px-5 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-purple-300 font-bold text-sm transition-all">
+            Cancel
+          </button>
+        )}
+
+        {journeyStep < 4 ? (
+          <button
+            onClick={() => {
+              if (journeyStep === 1 && !journeyForm.title.trim()) return;
+              if (journeyStep === 2 && !journeyForm.before.trim()) return;
+              if (journeyStep === 3 && !journeyForm.today.trim()) return;
+              setJourneyStep(s => s + 1);
+            }}
+            disabled={
+              (journeyStep === 1 && !journeyForm.title.trim()) ||
+              (journeyStep === 2 && !journeyForm.before.trim()) ||
+              (journeyStep === 3 && !journeyForm.today.trim())
+            }
+            className="flex-1 px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-white font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+          >
+            Continue →
+          </button>
+        ) : (
+          <button
+            onClick={handleJourneySubmit}
+            disabled={journeySubmitting || !journeyForm.goal.trim()}
+            className="flex-1 px-5 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-white font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
+          >
+            {journeySubmitting ? (
+              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Posting...</>
+            ) : (
+              <><CheckCircle className="w-4 h-4" /> Share My Journey 🎉</>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+<style>{`
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+`}</style>
 
 {/* Add padding for mobile bottom nav */}
 <div className="md:hidden h-20"></div>

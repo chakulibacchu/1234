@@ -18,9 +18,9 @@ type AppProps = {
   children: React.ReactNode;
 };
 
-const TOP_BAR_HEIGHT = 56;
 const SCREEN_WIDTH = 390;
 const SCREEN_HEIGHT = 844;
+const APP_BACKGROUND = 'linear-gradient(135deg, #240046, #330066)';
 
 function useScrollToTop() {
   const pathname = usePathname();
@@ -128,7 +128,7 @@ export default function App({ children }: AppProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #240046, #330066)',
+            background: APP_BACKGROUND,
           }}
         >
           <div
@@ -138,7 +138,7 @@ export default function App({ children }: AppProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'linear-gradient(135deg, #240046, #330066)',
+              background: APP_BACKGROUND,
               borderRadius: '2rem',
               overflow: 'hidden',
               boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
@@ -174,7 +174,7 @@ export default function App({ children }: AppProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#0a0a0a',
+          background: APP_BACKGROUND,
         }}
       >
         {/* ── Phone Screen Container ── */}
@@ -184,7 +184,7 @@ export default function App({ children }: AppProps) {
             height: SCREEN_HEIGHT,
             display: 'flex',
             flexDirection: 'column',
-            background: 'linear-gradient(135deg, #240046, #330066)',
+            background: APP_BACKGROUND,
             borderRadius: '2rem',
             overflow: 'hidden',
             boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
@@ -198,18 +198,10 @@ export default function App({ children }: AppProps) {
               overflowY: 'auto',
               overflowX: 'hidden',
               position: 'relative',
-              marginTop: `${TOP_BAR_HEIGHT}px`,
+              background: APP_BACKGROUND,
             }}
           >
-            {/* Scale wrapper — adjust 0.9 to taste */}
-            <div
-              style={{
-                transform: 'scale(0.9)',
-                transformOrigin: 'top center',
-              }}
-            >
-              {trialExpired ? <TrialExpiredPage /> : children}
-            </div>
+            {trialExpired ? <TrialExpiredPage /> : children}
           </div>
 
           {/* Bottom Nav — hidden when trial expired */}
